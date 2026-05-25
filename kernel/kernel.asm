@@ -56,6 +56,7 @@ halt_cpu:
 %include "kernel/protected/fat12.inc"
 %include "kernel/protected/browser32.inc"
 %include "kernel/protected/pci.inc"
+%include "kernel/protected/net/rtl8139.inc"
 %include "kernel/protected/syscalls.inc"
 %include "kernel/protected/gex.inc"
 %include "kernel/protected/shell32.inc"

@@ -131,6 +131,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_netdev
 
+    mov edi, pm_cmd_netup
+    call pm_starts_with_word
+    jc pm_do_netup
+
     mov edi, pm_cmd_regs
     call pm_starts_with_word
     jc pm_do_regs
@@ -285,6 +289,10 @@ pm_do_lspci:
 
 pm_do_netdev:
     call pm_pci_print_netdev
+    jmp shell32_loop
+
+pm_do_netup:
+    call rtl8139_netup
     jmp shell32_loop
 
 pm_do_regs:
@@ -460,6 +468,7 @@ pm_cmd_mem db 'mem',0
 pm_cmd_heapinfo db 'heapinfo',0
 pm_cmd_lspci db 'lspci',0
 pm_cmd_netdev db 'netdev',0
+pm_cmd_netup db 'netup',0
 pm_cmd_regs db 'regs',0
 pm_cmd_stack db 'stack',0
 pm_cmd_uptime db 'uptime',0

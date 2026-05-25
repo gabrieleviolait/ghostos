@@ -1,5 +1,5 @@
-; Ghost OS v1.0 kernel
-; Enters protected mode and runs a minimal 32-bit shell.
+; Ghost OS v0.6 kernel
+; Real-mode shell with VGA TUI, FAT12 support and optional protected mode demo.
 
 [BITS 16]
 [ORG 0x1000]
@@ -17,8 +17,16 @@ kernel_start:
     mov sp, STACK_TOP
     mov [boot_drive], dl
 
-    call collect_e820_memory_map
-    jmp enter_protected_mode_shell
+    call set_text_mode
+    call clear_screen
+    call set_cursor_home
+
+    mov si, banner
+    call print_string
+
+    call shell_loop
+
+    jmp halt_cpu
 
 halt_cpu:
     cli

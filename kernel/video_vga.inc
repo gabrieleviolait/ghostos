@@ -40,6 +40,34 @@ clear_screen:
     popa
     ret
 
+scroll_up:
+    pusha
+    push ds
+    push es
+
+    mov bl, [text_attr]
+
+    mov ax, 0xB800
+    mov ds, ax
+    mov es, ax
+
+    cld
+    mov si, SCREEN_WIDTH*2
+    xor di, di
+    mov cx, SCREEN_WIDTH*(SCREEN_HEIGHT-1)
+    rep movsw
+
+    mov ah, bl
+    mov al, ' '
+    mov di, SCREEN_WIDTH*(SCREEN_HEIGHT-1)*2
+    mov cx, SCREEN_WIDTH
+    rep stosw
+
+    pop es
+    pop ds
+    popa
+    ret
+
 print_char:
     mov [print_char_value], al
 
@@ -90,6 +118,7 @@ print_char:
     inc byte [cursor_y]
     cmp byte [cursor_y], SCREEN_HEIGHT
     jb .refresh
+    call scroll_up
     mov byte [cursor_y], SCREEN_HEIGHT-1
     jmp .refresh
 

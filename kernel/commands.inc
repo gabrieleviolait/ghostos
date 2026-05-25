@@ -60,6 +60,26 @@ do_ascii:
     call print_string
     jmp shell_loop
 
+do_stress:
+    mov si, stress_header
+    call print_string
+
+    xor bx, bx
+
+.loop:
+    inc bx
+    mov si, stress_line_prefix
+    call print_string
+    mov ax, bx
+    call print_uint16
+    mov si, stress_line_suffix
+    call print_string
+
+    cmp bx, 40
+    jb .loop
+
+    jmp shell_loop
+
 do_color:
     mov si, cmd_buffer
     call skip_first_word

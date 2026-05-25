@@ -69,6 +69,14 @@ shell_loop:
     call starts_with_word
     jc do_calc
 
+    mov di, cmd_stress
+    call starts_with_word
+    jc do_stress
+
+    mov di, cmd_flood
+    call starts_with_word
+    jc do_stress
+
     mov si, unknown_msg
     call print_string
     jmp shell_loop

@@ -1,6 +1,6 @@
 # Ghost OS roadmap
 
-Versione corrente: v0.5.3
+Versione corrente: v0.5.4
 
 ## Fase 0 - v0.5.2 stabile
 
@@ -29,8 +29,11 @@ Versione corrente: v0.5.3
 
 ## v0.5.4 - scrolling terminal
 
-- Scrolling vero quando `cursor_y` supera l'ultima riga.
-- Prompt e output lunghi senza bloccare il cursore in fondo.
+- Fatto: `scroll_up` nel driver VGA.
+- Fatto: righe 1-24 copiate in 0-23.
+- Fatto: ultima riga pulita.
+- Fatto: scroll quando `cursor_y >= 25`.
+- Fatto: comando `stress` / `flood` per testare stampa lunga.
 
 ## v0.5.5 - windows/panels TUI
 

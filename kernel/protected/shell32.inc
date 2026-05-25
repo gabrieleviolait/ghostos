@@ -187,6 +187,18 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_rxdump
 
+    mov edi, pm_cmd_rxpoll
+    call pm_starts_with_word
+    jc pm_do_rxpoll
+
+    mov edi, pm_cmd_rxpeek
+    call pm_starts_with_word
+    jc pm_do_rxpeek
+
+    mov edi, pm_cmd_rxstatus
+    call pm_starts_with_word
+    jc pm_do_rxstatus
+
     mov edi, pm_cmd_netreset
     call pm_starts_with_word
     jc pm_do_netreset
@@ -407,6 +419,18 @@ pm_do_rxdump:
     call rtl8139_rxdump
     jmp shell32_loop
 
+pm_do_rxpoll:
+    call rtl8139_rxpoll
+    jmp shell32_loop
+
+pm_do_rxpeek:
+    call rtl8139_rxpeek
+    jmp shell32_loop
+
+pm_do_rxstatus:
+    call rtl8139_rxstatus
+    jmp shell32_loop
+
 pm_do_netreset:
     call rtl8139_netreset
     jmp shell32_loop
@@ -552,7 +576,7 @@ pm_help_msg db \
 'mac setmac randommac',13,\
 'txdemo txdump pktdump pktinfo txstatus',13,\
 'pingfake arpfake txreal',13,\
-'rxdump netreset netclear',13,\
+'rxdump netreset netclear rxpoll rxpeek rxstatus',13,\
 'regs stack uptime panic',13,\
 'tasks yield',13,\
 'ls cat browse run halt',13,0
@@ -613,6 +637,9 @@ pm_cmd_txstatus db 'txstatus',0
 pm_cmd_pktinfo db 'pktinfo',0
 pm_cmd_pktdump db 'pktdump',0
 pm_cmd_rxdump db 'rxdump',0
+pm_cmd_rxpoll db 'rxpoll',0
+pm_cmd_rxpeek db 'rxpeek',0
+pm_cmd_rxstatus db 'rxstatus',0
 pm_cmd_netreset db 'netreset',0
 pm_cmd_netclear db 'netclear',0
 pm_cmd_regs db 'regs',0

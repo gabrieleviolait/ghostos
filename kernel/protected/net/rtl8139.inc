@@ -9,6 +9,12 @@ RTL8139_IMR       equ 0x3C
 RTL8139_ISR       equ 0x3E
 RTL8139_RCR       equ 0x44
 RTL8139_CONFIG1   equ 0x52
+RTL8139_ISR_ROK  equ 0001h
+RTL8139_ISR_TOK  equ 0004h
+RTL8139_ISR_RXER equ 0002h
+RTL8139_ISR_TXER equ 0008h
+RTL8139_CAPR equ 0x38
+RTL8139_CBR  equ 0x3A
 
 rtl8139_initialized db 0
 rtl8139_tx_count dd 0
@@ -28,6 +34,7 @@ rtl8139_netup:
     call pm_print_string
     mov byte [rtl8139_initialized], 1
     call rtl8139_rx_init
+    call rtl8139_rxstatus
     ret
 
 rtl8139_netup_msg db 'RTL8139 netup skeleton OK',13,0
@@ -741,11 +748,45 @@ rtl8139_txstatus:
 rtl8139_txstatus_msg db 'RTL8139 TSD0: ',0
 
 rtl8139_rx_init:
+
+    ; --- 1. Software Reset ---
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CR
+    mov al, 10h                 ; Bit 4 = RST (Reset)
+    out dx, al
+
+.reset_wait:
+    in al, dx
+    test al, 10h                ; Check if RST bit has cleared to 0
+    jnz .reset_wait
+
+    ; --- 2. Set RX Buffer Address (DMA) ---
     mov dx, [rtl8139_io_base]
     add dx, RTL8139_RBSTART
-    mov eax, rtl8139_rx_buffer
+    
+    ; CRITICAL: Ensure this is the PHYSICAL address of the buffer
+    mov eax, rtl8139_rx_buffer  
+    out dx, eax
+    
+    ; --- 3. Configure Receive Configuration Register (RCR) ---
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_RCR
+    
+    ; Config Bits:
+    ; AAP(1) | APM(2) | AM(4) | AB(8) -> 0x0F (Accept all common packets)
+    ; WRAP(Bit 7 = 0x80) -> Wraps buffer pointer instead of overflowing
+    ; Max DMA Burst (Bits 8-10 = 111b -> 0x700) -> Unlimited burst
+    ; RX Buffer Size (Bits 11-12 = 00b) -> 8K + 16 bytes
+    mov eax, 0000078Fh          ; 0x700 (DMA) + 0x80 (WRAP) + 0x0F (Accept flags)
     out dx, eax
 
+    ; --- 4. Enable RX + TX ---
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CR
+    mov al, 0Ch                 ; Bit 3 (TE) + Bit 2 (RE)
+    out dx, al
+
+    ; --- 5. Wrap Up ---
     mov byte [rtl8139_rx_ready], 1
 
     mov esi, rtl8139_rx_ready_msg
@@ -753,3 +794,153 @@ rtl8139_rx_init:
     ret
 
 rtl8139_rx_ready_msg db 'RTL8139 RX buffer ready',13,0
+
+rtl8139_rxpoll:
+    cmp byte [rtl8139_initialized], 1
+    jne .not_ready
+
+    mov esi, rtl8139_rxpoll_msg
+    call pm_print_string
+
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_ISR
+    in ax, dx
+    mov bx, ax
+
+    movzx eax, ax
+    call pm_print_hex32
+    call pm_newline
+
+    test bx, RTL8139_ISR_ROK
+    jz .check_tok
+
+    inc dword [rtl8139_rx_count]
+    mov esi, rtl8139_rxpoll_rok_msg
+    call pm_print_string
+
+.check_tok:
+    test bx, RTL8139_ISR_TOK
+    jz .check_errors
+
+    mov esi, rtl8139_rxpoll_tok_msg
+    call pm_print_string
+
+.check_errors:
+    test bx, RTL8139_ISR_RXER
+    jz .check_txer
+
+    inc dword [rtl8139_error_count]
+    mov esi, rtl8139_rxpoll_rxer_msg
+    call pm_print_string
+
+.check_txer:
+    test bx, RTL8139_ISR_TXER
+    jz .ack
+
+    inc dword [rtl8139_error_count]
+    mov esi, rtl8139_rxpoll_txer_msg
+    call pm_print_string
+
+.ack:
+    ; acknowledge handled bits
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_ISR
+    mov ax, RTL8139_ISR_ROK | RTL8139_ISR_TOK | RTL8139_ISR_RXER | RTL8139_ISR_TXER
+    out dx, ax
+    ret
+
+.not_ready:
+    inc dword [rtl8139_error_count]
+    mov esi, rtl8139_not_ready_msg
+    call pm_print_string
+    ret
+
+rtl8139_rxpoll_msg db 'RTL8139 ISR: ',0
+rtl8139_rxpoll_rok_msg db 'RX OK',13,0
+rtl8139_rxpoll_tok_msg db 'TX OK',13,0
+rtl8139_rxpoll_rxer_msg db 'RX ERROR',13,0
+rtl8139_rxpoll_txer_msg db 'TX ERROR',13,0
+
+
+rtl8139_rxpeek:
+    cmp byte [rtl8139_rx_ready], 1
+    jne .not_ready
+
+    mov esi, rtl8139_rxpeek_msg
+    call pm_print_string
+
+    mov esi, rtl8139_rx_buffer
+    mov ecx, 32
+    xor ebx, ebx
+
+.loop:
+    lodsb
+    call pm_print_hex8
+
+    mov al, ' '
+    call pm_print_char
+
+    inc ebx
+    cmp ebx, 16
+    jne .continue
+
+    call pm_newline
+    xor ebx, ebx
+
+.continue:
+    loop .loop
+
+    call pm_newline
+    ret
+
+.not_ready:
+    mov esi, rtl8139_rxpeek_notready_msg
+    call pm_print_string
+    ret
+
+rtl8139_rxpeek_msg db 'RTL8139 RX buffer peek:',13,0
+rtl8139_rxpeek_notready_msg db 'RX buffer not initialized',13,0
+
+rtl8139_rxstatus:
+    mov esi, rtl8139_rxstatus_cr_msg
+    call pm_print_string
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CR
+    in al, dx
+    movzx eax, al
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_rxstatus_isr_msg
+    call pm_print_string
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_ISR
+    in ax, dx
+    movzx eax, ax
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_rxstatus_capr_msg
+    call pm_print_string
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CAPR
+    in ax, dx
+    movzx eax, ax
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_rxstatus_cbr_msg
+    call pm_print_string
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CBR
+    in ax, dx
+    movzx eax, ax
+    call pm_print_hex32
+    call pm_newline
+
+    ret
+
+rtl8139_rxstatus_cr_msg db 'CR: ',0
+rtl8139_rxstatus_isr_msg db 'ISR: ',0
+rtl8139_rxstatus_capr_msg db 'CAPR: ',0
+rtl8139_rxstatus_cbr_msg db 'CBR: ',0

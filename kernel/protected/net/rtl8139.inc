@@ -58,3 +58,22 @@ rtl8139_init_msg   db 'initialized=',0
 rtl8139_tx_msg     db 'tx_count=',0
 rtl8139_rx_msg     db 'rx_count=',0
 rtl8139_err_msg    db 'errors=',0
+
+rtl8139_txdemo:
+    cmp byte [rtl8139_initialized], 1
+    jne .not_ready
+
+    inc dword [rtl8139_tx_count]
+
+    mov esi, rtl8139_txdemo_msg
+    call pm_print_string
+    ret
+
+.not_ready:
+    inc dword [rtl8139_error_count]
+    mov esi, rtl8139_not_ready_msg
+    call pm_print_string
+    ret
+
+rtl8139_txdemo_msg db 'RTL8139 txdemo skeleton: TX counter increased',13,0
+rtl8139_not_ready_msg db 'RTL8139 not initialized. Run netup first.',13,0

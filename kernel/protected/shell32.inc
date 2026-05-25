@@ -143,6 +143,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_txdemo
 
+    mov edi, pm_cmd_rxdump
+    call pm_starts_with_word
+    jc pm_do_rxdump
+
     mov edi, pm_cmd_regs
     call pm_starts_with_word
     jc pm_do_regs
@@ -309,6 +313,10 @@ pm_do_netstat:
 
 pm_do_txdemo:
     call rtl8139_txdemo
+    jmp shell32_loop
+
+pm_do_rxdump:
+    call rtl8139_rxdump
     jmp shell32_loop
 
 pm_do_regs:
@@ -487,6 +495,7 @@ pm_cmd_netdev db 'netdev',0
 pm_cmd_netup db 'netup',0
 pm_cmd_netstat db 'netstat',0
 pm_cmd_txdemo db 'txdemo',0
+pm_cmd_rxdump db 'rxdump',0
 pm_cmd_regs db 'regs',0
 pm_cmd_stack db 'stack',0
 pm_cmd_uptime db 'uptime',0

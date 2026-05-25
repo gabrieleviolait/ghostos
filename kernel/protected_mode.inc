@@ -1,4 +1,4 @@
-; v0.9 protected mode runtime: GDT, IDT, PIC, IRQ1 keyboard, VGA shell.
+; v1.0 protected mode runtime: memory manager, paging, tasks, VGA shell.
 
 CODE_SEL equ gdt_code - gdt_start
 DATA_SEL equ gdt_data - gdt_start
@@ -6,6 +6,46 @@ IDT_PRESENT_INT_GATE equ 10001110b
 KBD_BUFFER_MASK equ 31
 VGA_BASE equ 0xB8000
 PM_STACK_TOP equ 0x90000
+PAGE_PRESENT_RW equ 0x00000003
+
+TASK_SIZE equ 16
+TASK_ID equ 0
+TASK_STATE equ 4
+TASK_ENTRY equ 8
+TASK_COUNTER equ 12
+TASK_READY equ 1
+TASK_RUNNING equ 2
+TASK_BLOCKED equ 3
+
+collect_e820_memory_map:
+    mov word [e820_count], 0
+    xor ax, ax
+    mov es, ax
+    xor ebx, ebx
+    xor bp, bp
+    mov di, e820_map
+
+.next:
+    mov eax, 0xE820
+    mov edx, 0x534D4150
+    mov ecx, E820_ENTRY_SIZE
+    int 0x15
+    jc .done
+    cmp eax, 0x534D4150
+    jne .done
+    cmp ecx, 20
+    jb .done
+
+    inc bp
+    add di, E820_ENTRY_SIZE
+    cmp bp, E820_MAX_ENTRIES
+    jae .done
+    cmp ebx, 0
+    jne .next
+
+.done:
+    mov [e820_count], bp
+    ret
 
 enter_protected_mode_demo:
 enter_protected_mode_shell:
@@ -32,12 +72,15 @@ protected_mode_start:
     call pm_idt_init
     lidt [idt_descriptor]
     call pm_pic_remap
+    call pm_memory_init
+    call pm_tasks_init
 
     sti
 
     call pm_clear_screen
     mov esi, pm_banner
     call pm_print_string
+    call pm_print_system_status
     call shell32_loop
 
 pm_halt:
@@ -151,6 +194,275 @@ pm_irq1_keyboard:
 
     popad
     iretd
+
+pm_memory_init:
+    call pm_detect_memory_mb
+    call pm_init_frame_bitmap
+    call pm_init_paging
+    call pm_heap_init
+    ret
+
+pm_detect_memory_mb:
+    pushad
+
+    mov dword [pm_detected_memory_mb], PM_MAX_MEMORY_MB
+    cmp word [e820_count], 0
+    je .done
+
+    xor edx, edx
+    movzx ecx, word [e820_count]
+    mov esi, e820_map
+
+.loop:
+    cmp dword [esi+16], 1
+    jne .next
+    cmp dword [esi+4], 0
+    jne .next
+    cmp dword [esi+12], 0
+    jne .large
+
+    mov eax, [esi]
+    add eax, [esi+8]
+    jc .large
+    cmp eax, edx
+    jbe .next
+    mov edx, eax
+    jmp .next
+
+.large:
+    mov edx, PM_MAX_MEMORY_MB*1024*1024
+
+.next:
+    add esi, E820_ENTRY_SIZE
+    loop .loop
+
+    cmp edx, 0
+    je .done
+    shr edx, 20
+    cmp edx, PM_MAX_MEMORY_MB
+    jbe .store
+    mov edx, PM_MAX_MEMORY_MB
+
+.store:
+    mov [pm_detected_memory_mb], edx
+
+.done:
+    popad
+    ret
+
+pm_init_frame_bitmap:
+    pushad
+
+    mov edi, pm_frame_bitmap
+    mov al, 0xFF
+    mov ecx, PM_FRAME_BITMAP_SIZE
+    cld
+    rep stosb
+
+    mov eax, 1024
+    mov ebx, [pm_detected_memory_mb]
+    shl ebx, 8
+
+.free_loop:
+    cmp eax, ebx
+    jae .done
+    call free_frame_by_index
+    inc eax
+    jmp .free_loop
+
+.done:
+    popad
+    ret
+
+alloc_frame:
+    push ebx
+    push ecx
+
+    xor eax, eax
+    mov ecx, PM_FRAME_COUNT
+
+.scan:
+    bt dword [pm_frame_bitmap], eax
+    jnc .found
+    inc eax
+    loop .scan
+
+    pop ecx
+    pop ebx
+    stc
+    ret
+
+.found:
+    bts dword [pm_frame_bitmap], eax
+    shl eax, 12
+    pop ecx
+    pop ebx
+    clc
+    ret
+
+free_frame:
+    push eax
+    shr eax, 12
+    cmp eax, PM_FRAME_COUNT
+    jae .done
+    btr dword [pm_frame_bitmap], eax
+.done:
+    pop eax
+    ret
+
+free_frame_by_index:
+    btr dword [pm_frame_bitmap], eax
+    ret
+
+pm_init_paging:
+    pushad
+
+    mov edi, pm_page_directory
+    xor eax, eax
+    mov ecx, 1024
+    cld
+    rep stosd
+
+    mov edi, pm_first_page_table
+    mov eax, PAGE_PRESENT_RW
+    mov ecx, 1024
+
+.map_loop:
+    stosd
+    add eax, PM_FRAME_SIZE
+    loop .map_loop
+
+    mov eax, pm_first_page_table
+    or eax, PAGE_PRESENT_RW
+    mov [pm_page_directory], eax
+
+    mov eax, pm_page_directory
+    mov cr3, eax
+    mov eax, cr0
+    or eax, 0x80000000
+    mov cr0, eax
+    jmp .paging_enabled
+
+.paging_enabled:
+    popad
+    ret
+
+pm_heap_init:
+    mov dword [pm_heap_current], PM_HEAP_START
+    mov dword [pm_heap_end], PM_HEAP_START+PM_HEAP_SIZE
+    ret
+
+kmalloc:
+    push ebx
+
+    add ecx, 15
+    and ecx, 0xFFFFFFF0
+    mov eax, [pm_heap_current]
+    mov ebx, eax
+    add ebx, ecx
+    cmp ebx, [pm_heap_end]
+    ja .fail
+    mov [pm_heap_current], ebx
+    pop ebx
+    clc
+    ret
+
+.fail:
+    xor eax, eax
+    pop ebx
+    stc
+    ret
+
+kfree:
+    ret
+
+pm_tasks_init:
+    mov dword [pm_task_count], 2
+    mov dword [pm_current_task], 0
+
+    mov edi, pm_tasks
+    mov dword [edi+TASK_ID], 1
+    mov dword [edi+TASK_STATE], TASK_RUNNING
+    mov dword [edi+TASK_ENTRY], shell32_loop
+    mov dword [edi+TASK_COUNTER], 0
+
+    add edi, TASK_SIZE
+    mov dword [edi+TASK_ID], 2
+    mov dword [edi+TASK_STATE], TASK_READY
+    mov dword [edi+TASK_ENTRY], pm_demo_task
+    mov dword [edi+TASK_COUNTER], 0
+    ret
+
+yield:
+pm_yield:
+    pushad
+    mov dword [pm_current_task], 1
+    mov dword [pm_tasks+TASK_STATE], TASK_READY
+    mov dword [pm_tasks+TASK_SIZE+TASK_STATE], TASK_RUNNING
+    call pm_demo_task
+    mov dword [pm_tasks+TASK_STATE], TASK_RUNNING
+    mov dword [pm_tasks+TASK_SIZE+TASK_STATE], TASK_READY
+    mov dword [pm_current_task], 0
+    popad
+    ret
+
+pm_demo_task:
+    inc dword [pm_demo_counter]
+    mov eax, [pm_demo_counter]
+    mov [pm_tasks+TASK_SIZE+TASK_COUNTER], eax
+    mov esi, pm_demo_msg
+    call pm_print_string
+    mov eax, [pm_demo_counter]
+    call pm_print_uint32
+    call pm_newline
+    ret
+
+pm_print_system_status:
+    mov esi, pm_memory_prefix
+    call pm_print_string
+    mov eax, [pm_detected_memory_mb]
+    call pm_print_uint32
+    mov esi, pm_memory_suffix
+    call pm_print_string
+    mov esi, pm_heap_ready_msg
+    call pm_print_string
+    mov esi, pm_task1_msg
+    call pm_print_string
+    mov esi, pm_task2_msg
+    call pm_print_string
+    call pm_newline
+    ret
+
+pm_print_uint32:
+    pushad
+
+    cmp eax, 0
+    jne .convert
+    mov al, '0'
+    call pm_print_char
+    jmp .done
+
+.convert:
+    xor ecx, ecx
+    mov ebx, 10
+
+.div_loop:
+    xor edx, edx
+    div ebx
+    push edx
+    inc ecx
+    cmp eax, 0
+    jne .div_loop
+
+.print_loop:
+    pop eax
+    add al, '0'
+    call pm_print_char
+    loop .print_loop
+
+.done:
+    popad
+    ret
 
 pm_kbd_buffer_put:
     push ebx
@@ -461,6 +773,18 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_version
 
+    mov edi, pm_cmd_mem
+    call pm_starts_with_word
+    jc pm_do_mem
+
+    mov edi, pm_cmd_tasks
+    call pm_starts_with_word
+    jc pm_do_tasks
+
+    mov edi, pm_cmd_yield
+    call pm_starts_with_word
+    jc pm_do_yield
+
     mov edi, pm_cmd_halt
     call pm_starts_with_word
     jc pm_do_halt
@@ -491,10 +815,34 @@ pm_do_version:
     call pm_print_string
     jmp shell32_loop
 
+pm_do_mem:
+    call pm_print_system_status
+    jmp shell32_loop
+
+pm_do_tasks:
+    call pm_print_tasks
+    jmp shell32_loop
+
+pm_do_yield:
+    call pm_yield
+    jmp shell32_loop
+
 pm_do_halt:
     mov esi, pm_halt_msg
     call pm_print_string
     jmp pm_halt
+
+pm_print_tasks:
+    mov esi, pm_task1_msg
+    call pm_print_string
+    mov esi, pm_task2_msg
+    call pm_print_string
+    mov esi, pm_demo_counter_msg
+    call pm_print_string
+    mov eax, [pm_demo_counter]
+    call pm_print_uint32
+    call pm_newline
+    ret
 
 [BITS 16]
 
@@ -541,6 +889,15 @@ pm_kbd_head db 0
 pm_kbd_tail db 0
 pm_kbd_buffer times 32 db 0
 pm_cmd_buffer times CMD_BUFFER_SIZE db 0
+pm_detected_memory_mb dd PM_MAX_MEMORY_MB
+pm_heap_current dd 0
+pm_heap_end dd 0
+pm_task_count dd 0
+pm_current_task dd 0
+pm_demo_counter dd 0
+pm_tasks times TASK_SIZE*4 db 0
+e820_count dw 0
+e820_map times E820_MAX_ENTRIES*E820_ENTRY_SIZE db 0
 
 pm_scancode_ascii:
     db 0,0,'1','2','3','4','5','6','7','8','9','0','-','=',8,0
@@ -550,15 +907,25 @@ pm_scancode_ascii:
     times 128-($-pm_scancode_ascii) db 0
 
 pm_banner db 'Ghost OS 32-bit shell',13
-          db 'Protected mode, VGA memory, IRQ1 keyboard.',13,13,0
+          db 'Protected mode, paging, heap, cooperative tasks.',13,13,0
+pm_memory_prefix db 'Memory: ',0
+pm_memory_suffix db ' MB detected',13,0
+pm_heap_ready_msg db 'Heap initialized',13,0
+pm_task1_msg db 'Task 1: shell',13,0
+pm_task2_msg db 'Task 2: demo',13,0
+pm_demo_msg db 'Task 2 demo counter: ',0
+pm_demo_counter_msg db 'Demo counter: ',0
 pm_prompt db 'ghost32> ',0
 pm_help_msg db 'Commands:',13
             db '  help       show this help',13
             db '  clear/cls  clear screen',13
             db '  echo TEXT  print text',13
             db '  version    show version',13
+            db '  mem        show memory/task startup status',13
+            db '  tasks      show task table summary',13
+            db '  yield      run cooperative demo task once',13
             db '  halt       stop CPU',13,0
-pm_version_msg db 'Ghost OS v0.9 / 32-bit protected mode shell',13,0
+pm_version_msg db 'Ghost OS v1.0 / memory manager + task abstraction',13,0
 pm_unknown_msg db 'Unknown command. Type help.',13,0
 pm_halt_msg db 'System halted.',13,0
 
@@ -567,4 +934,12 @@ pm_cmd_clear db 'clear',0
 pm_cmd_cls db 'cls',0
 pm_cmd_echo db 'echo',0
 pm_cmd_version db 'version',0
+pm_cmd_mem db 'mem',0
+pm_cmd_tasks db 'tasks',0
+pm_cmd_yield db 'yield',0
 pm_cmd_halt db 'halt',0
+
+align 4096
+pm_page_directory times 1024 dd 0
+pm_first_page_table times 1024 dd 0
+pm_frame_bitmap times PM_FRAME_BITMAP_SIZE db 0

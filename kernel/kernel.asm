@@ -1,4 +1,4 @@
-; Ghost OS v0.9 kernel
+; Ghost OS v1.0 kernel
 ; Enters protected mode and runs a minimal 32-bit shell.
 
 [BITS 16]
@@ -17,6 +17,7 @@ kernel_start:
     mov sp, STACK_TOP
     mov [boot_drive], dl
 
+    call collect_e820_memory_map
     jmp enter_protected_mode_shell
 
 halt_cpu:

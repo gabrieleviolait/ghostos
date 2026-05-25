@@ -1,4 +1,4 @@
-; Ghost OS v0.5.2 kernel
+; Ghost OS v0.5.3 kernel
 ; Pure NASM 16-bit x86 real mode CLI/TUI OS.
 
 [BITS 16]

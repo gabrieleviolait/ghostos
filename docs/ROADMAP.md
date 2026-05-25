@@ -1,8 +1,10 @@
 # Ghost OS roadmap
 
+Versione corrente: v0.5.3
+
 ## Fase 0 - v0.5.2 stabile
 
-- Versione allineata a v0.5.2 in bootloader, kernel e messaggi.
+- Checkpoint v0.5.2 allineato in bootloader, kernel e messaggi.
 - Bootloader con `KERNEL_SECTORS = 32`.
 - Kernel fissato a `KERNEL_SIZE = 16384` byte.
 - Comandi base da verificare: `help`, `gui`, `browse`, `calc`, `color`, backspace.
@@ -20,10 +22,10 @@
 
 ## v0.5.3 - multi-digit calculator
 
-- `parse_uint16`.
-- `calc` con numeri multi-cifra.
-- Operatori `+`, `-`, `*`, `/`.
-- Errori per input non valido, risultato negativo e divisione per zero.
+- Fatto: `parse_uint16`.
+- Fatto: `calc` con numeri multi-cifra.
+- Fatto: operatori `+`, `-`, `*`, `/`.
+- Fatto: errori per input non valido, overflow, risultato negativo e divisione per zero.
 
 ## v0.5.4 - scrolling terminal
 

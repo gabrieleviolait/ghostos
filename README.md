@@ -1,8 +1,7 @@
 # GhostOS
 
-Versione corrente: v0.5.2
+Versione corrente: v0.5.3
 
 Ghost OS e' un piccolo sistema operativo educativo in Assembly NASM
-16-bit real mode. Il kernel e' ora diviso in moduli `.inc` per rendere
-gestibili le prossime tappe: calcolatrice multi-digit, scrolling
-terminal, TUI a pannelli, FAT12, pagine `.GHT` e protected mode.
+16-bit real mode. Il kernel e' diviso in moduli `.inc` e la shell include
+una calcolatrice multi-digit con operatori `+`, `-`, `*` e `/`.

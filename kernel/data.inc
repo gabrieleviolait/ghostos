@@ -24,7 +24,7 @@ cmd_calc    db 'calc',0
 cmd_browse  db 'browse',0
 
 banner db '================================================',13
-       db '  Ghost OS v0.5.2',13
+       db '  Ghost OS v0.5.3',13
        db '  Minimal 16-bit Assembly OS / BIOS only',13
        db '================================================',13
        db '  Type help for commands. Type gui for dashboard.',13,13,0
@@ -38,7 +38,7 @@ help_msg db 'Commands:',13
          db '  echo TEXT      print text',13
          db '  about          system info',13
          db '  version        show version',13
-         db '  calc 2+3       one-digit add/sub calculator',13
+         db '  calc 12*34     multi-digit calculator',13
          db '  mem            show conventional memory KB',13
          db '  ascii          show internal ASCII logo',13
          db '  color N        set text color 0-F',13
@@ -81,12 +81,12 @@ browser_page db '+------------------------------------------------+',13
              db 13
              db '+------------------------------------------------+',13,13,0
 
-about_msg db 'Ghost OS v0.5.2',13
+about_msg db 'Ghost OS v0.5.3',13
           db 'Tiny educational OS written from scratch in NASM.',13
           db 'No Linux, no DOS, no external kernel. BIOS only.',13
           db 'Goal: small CLI-first assembly operating system.',13,0
 
-version_msg db 'Ghost OS v0.5.2 / x86 16-bit real mode / NASM',13,0
+version_msg db 'Ghost OS v0.5.3 / x86 16-bit real mode / NASM',13,0
 
 unknown_msg db 'Unknown command. Type help.',13,0
 reboot_msg  db 'Rebooting...',13,0
@@ -95,8 +95,10 @@ mem_msg     db 'Conventional memory: ',0
 kb_msg      db ' KB',13,0
 result_msg  db 'Result: ',0
 
-negative_msg db 'Result is negative. v0.5.2 supports unsigned display only.',13,0
-calc_usage  db 'Usage: calc 2+3 or calc 8-5. One digit numbers only.',13,0
+negative_msg db 'Result is negative. v0.5.3 displays unsigned results only.',13,0
+div_zero_msg db 'Division by zero.',13,0
+overflow_msg db 'Result is too large for uint16.',13,0
+calc_usage  db 'Usage: calc 12+34, calc 12-5, calc 7*8, or calc 20/4.',13,0
 color_usage db 'Usage: color N where N is 0-F.',13,0
 color_ok    db 'Color changed.',13,0
 

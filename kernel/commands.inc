@@ -81,52 +81,71 @@ do_calc:
     call skip_first_word
     call skip_spaces
 
-    mov al, [si]
-    cmp al, '0'
-    jb .usage
-    cmp al, '9'
-    ja .usage
-    sub al, '0'
-    mov bl, al
+    call parse_uint16
+    jc .usage
+    push ax
 
+    call skip_spaces
+
+    mov dl, [si]
+    cmp dl, '+'
+    je .operator_ok
+    cmp dl, '-'
+    je .operator_ok
+    cmp dl, '*'
+    je .operator_ok
+    cmp dl, '/'
+    je .operator_ok
+    jmp .usage_drop_left
+
+.operator_ok:
     inc si
-    mov al, [si]
-    cmp al, '+'
+    call skip_spaces
+    call parse_uint16
+    jc .usage_drop_left
+
+    mov cx, ax
+    call skip_spaces
+    cmp byte [si], 0
+    jne .usage_drop_left
+
+    pop ax
+
+    cmp dl, '+'
     je .plus
-    cmp al, '-'
+    cmp dl, '-'
     je .minus
+    cmp dl, '*'
+    je .multiply
+    cmp dl, '/'
+    je .divide
     jmp .usage
 
 .plus:
-    inc si
-    mov al, [si]
-    cmp al, '0'
-    jb .usage
-    cmp al, '9'
-    ja .usage
-    sub al, '0'
-    add bl, al
-    xor ax, ax
-    mov al, bl
-    mov si, result_msg
-    call print_string
-    call print_uint16
-    call newline
-    jmp shell_loop
+    add ax, cx
+    jc .overflow
+    jmp .print_result
 
 .minus:
-    inc si
-    mov al, [si]
-    cmp al, '0'
-    jb .usage
-    cmp al, '9'
-    ja .usage
-    sub al, '0'
-    cmp bl, al
+    cmp ax, cx
     jb .negative
-    sub bl, al
-    xor ax, ax
-    mov al, bl
+    sub ax, cx
+    jmp .print_result
+
+.multiply:
+    mul cx
+    cmp dx, 0
+    jne .overflow
+    jmp .print_result
+
+.divide:
+    cmp cx, 0
+    je .divide_by_zero
+    xor dx, dx
+    div cx
+    jmp .print_result
+
+.print_result:
     mov si, result_msg
     call print_string
     call print_uint16
@@ -137,6 +156,19 @@ do_calc:
     mov si, negative_msg
     call print_string
     jmp shell_loop
+
+.divide_by_zero:
+    mov si, div_zero_msg
+    call print_string
+    jmp shell_loop
+
+.overflow:
+    mov si, overflow_msg
+    call print_string
+    jmp shell_loop
+
+.usage_drop_left:
+    pop ax
 
 .usage:
     mov si, calc_usage

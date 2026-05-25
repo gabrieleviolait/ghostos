@@ -1,4 +1,4 @@
-; Ghost OS v0.5.2 bootloader
+; Ghost OS v0.5.3 bootloader
 ; Pure NASM 16-bit x86 real mode
 ; Loads kernel from disk sectors into 0000:1000 and jumps there.
 
@@ -95,7 +95,7 @@ halt:
 BOOT_DRIVE  db 0
 retry_count db 0
 
-boot_msg     db 'Ghost OS bootloader v0.5.2',13,10
+boot_msg     db 'Ghost OS bootloader v0.5.3',13,10
              db 'Loading kernel...',13,10,0
 
 ok_msg       db 'Kernel loaded.',13,10,0

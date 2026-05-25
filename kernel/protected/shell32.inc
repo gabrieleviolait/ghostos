@@ -171,6 +171,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_txreal
 
+    mov edi, pm_cmd_txstatus
+    call pm_starts_with_word
+    jc pm_do_txstatus
+
     mov edi, pm_cmd_pktinfo
     call pm_starts_with_word
     jc pm_do_pktinfo
@@ -387,6 +391,10 @@ pm_do_txreal:
     call rtl8139_txreal
     jmp shell32_loop
 
+pm_do_txstatus:
+    call rtl8139_txstatus
+    jmp shell32_loop
+
 pm_do_pktinfo:
     call rtl8139_pktinfo
     jmp shell32_loop
@@ -542,7 +550,7 @@ pm_help_msg db \
 'mem heapinfo memmap pages',13,\
 'lspci netdev netup netstat',13,\
 'mac setmac randommac',13,\
-'txdemo txdump pktdump pktinfo',13,\
+'txdemo txdump pktdump pktinfo txstatus',13,\
 'pingfake arpfake txreal',13,\
 'rxdump netreset netclear',13,\
 'regs stack uptime panic',13,\
@@ -601,6 +609,7 @@ pm_cmd_arpfake db 'arpfake',0
 pm_cmd_txdemo db 'txdemo',0
 pm_cmd_txdump db 'txdump',0
 pm_cmd_txreal db 'txreal',0
+pm_cmd_txstatus db 'txstatus',0
 pm_cmd_pktinfo db 'pktinfo',0
 pm_cmd_pktdump db 'pktdump',0
 pm_cmd_rxdump db 'rxdump',0

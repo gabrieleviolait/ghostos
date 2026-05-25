@@ -711,3 +711,17 @@ rtl8139_txreal:
 
 rtl8139_txreal_sent_msg db 'RTL8139 TX submitted to hardware',13,0
 rtl8139_txreal_no_packet_msg db 'RTL8139 TX failed: no packet built',13,0
+
+rtl8139_txstatus:
+    mov esi, rtl8139_txstatus_msg
+    call pm_print_string
+
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_TSD0
+    in eax, dx
+
+    call pm_print_hex32
+    call pm_newline
+    ret
+
+rtl8139_txstatus_msg db 'RTL8139 TSD0: ',0

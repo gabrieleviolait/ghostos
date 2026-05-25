@@ -1,6 +1,6 @@
 # Ghost Executable `.GEX` design
 
-Target: v1.4.5-alpha. The protected-mode loader supports small ring-0
+Target: v1.5-alpha. The protected-mode loader supports small ring-0
 CLI programs with a stable syscall ABI and runtime metadata.
 
 ## Header
@@ -23,7 +23,7 @@ The executable image starts immediately after the 32-byte header.
 
 - Reject files without `GEX1`.
 - Reject images larger than the available load region.
-- Reject non-zero flags in v1.4.5-alpha.
+- Reject non-zero flags in v1.5-alpha.
 - Reject load addresses other than `0x00180000`.
 - Reject entry offsets outside the image.
 - Copy `image_size` bytes to `load_address`.

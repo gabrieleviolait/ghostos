@@ -1,6 +1,6 @@
 # Ghost OS roadmap
 
-Versione corrente: v1.4.5-alpha
+Versione corrente: v1.5-alpha
 
 ## Fase 0 - v0.5.2 stabile
 
@@ -155,3 +155,30 @@ Versione corrente: v1.4.5-alpha
 - Fatto: comandi `regs`, `stack`, `uptime`, `panic`.
 - Fatto: heap con guard di coda, contatori bad-free/corruzione e sanity check.
 - Fuori scope: networking, TCP/IP, SOCKS5, Tor, GUI e multimedia.
+
+## v1.5-alpha - PCI and NIC discovery foundations
+
+- Fatto: `kernel/protected/pci.inc` con accesso PCI config mechanism 1 su
+  porte `0xCF8` e `0xCFC`.
+- Fatto: funzioni `pci_config_read32`, `pci_config_read16`, `pci_config_read8`
+  e `pci_scan_bus`.
+- Fatto: comando `lspci` con output compatto di bus, device, function,
+  vendor/device id, class, subclass e prog_if.
+- Fatto: comando `netdev` per rilevare RTL8139, NE2000 PCI compatibile,
+  Intel E1000 e NIC Ethernet generiche.
+- Fatto: stampa BAR0/BAR1, IRQ line e MAC solo quando leggibile in modo sicuro
+  da BAR I/O RTL8139.
+- Non fatto: abilitazione interrupt NIC, RX/TX pacchetti, TCP/IP, DNS, HTTP,
+  SOCKS5, Tor o browser networking.
+
+QEMU RTL8139:
+
+```sh
+qemu-system-i386 -drive file=build/ghostos.img,format=raw,if=floppy -vga std -netdev user,id=n0 -device rtl8139,netdev=n0
+```
+
+QEMU E1000:
+
+```sh
+qemu-system-i386 -drive file=build/ghostos.img,format=raw,if=floppy -vga std -netdev user,id=n0 -device e1000,netdev=n0
+```

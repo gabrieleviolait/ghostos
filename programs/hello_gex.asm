@@ -1,4 +1,4 @@
-; Sample Ghost Executable for the v1.4.5-alpha loader.
+; Sample Ghost Executable for the v1.5-alpha loader.
 
 [BITS 32]
 

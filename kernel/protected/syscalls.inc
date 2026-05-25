@@ -88,4 +88,4 @@ pm_gex_legacy_syscall:
     pop edx
     ret
 
-pm_sys_version_string db 'Ghost OS v1.4.5-alpha',0
+pm_sys_version_string db 'Ghost OS v1.5-alpha',0

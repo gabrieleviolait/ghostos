@@ -464,7 +464,8 @@ pm_history times PM_HISTORY_COUNT*PM_EDIT_MAX db 0
 pm_completion_table:
     dd pm_cmd_help, pm_cmd_clear, pm_cmd_cls, pm_cmd_echo
     dd pm_cmd_version, pm_cmd_mem, pm_cmd_heapinfo, pm_cmd_pages
-    dd pm_cmd_regs, pm_cmd_stack, pm_cmd_uptime, pm_cmd_panic
+    dd pm_cmd_lspci, pm_cmd_netdev, pm_cmd_regs, pm_cmd_stack
+    dd pm_cmd_uptime, pm_cmd_panic
     dd pm_cmd_memmap, pm_cmd_tasks, pm_cmd_yield, pm_cmd_ls
     dd pm_cmd_cat, pm_cmd_browse, pm_cmd_run, pm_cmd_halt, 0
 

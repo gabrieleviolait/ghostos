@@ -1,4 +1,4 @@
-; Ghost OS v1.4.5-alpha kernel
+; Ghost OS v1.5-alpha kernel
 ; Real-mode recovery shell plus protected-mode ghost32 runtime.
 
 [BITS 16]
@@ -55,6 +55,7 @@ halt_cpu:
 %include "kernel/protected/vga32.inc"
 %include "kernel/protected/fat12.inc"
 %include "kernel/protected/browser32.inc"
+%include "kernel/protected/pci.inc"
 %include "kernel/protected/syscalls.inc"
 %include "kernel/protected/gex.inc"
 %include "kernel/protected/shell32.inc"

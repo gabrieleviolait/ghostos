@@ -123,6 +123,14 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_heapinfo
 
+    mov edi, pm_cmd_lspci
+    call pm_starts_with_word
+    jc pm_do_lspci
+
+    mov edi, pm_cmd_netdev
+    call pm_starts_with_word
+    jc pm_do_netdev
+
     mov edi, pm_cmd_regs
     call pm_starts_with_word
     jc pm_do_regs
@@ -271,6 +279,14 @@ pm_do_heapinfo:
     call pm_print_heap_info
     jmp shell32_loop
 
+pm_do_lspci:
+    call pm_pci_print_devices
+    jmp shell32_loop
+
+pm_do_netdev:
+    call pm_pci_print_netdev
+    jmp shell32_loop
+
 pm_do_regs:
     pushad
     mov eax, [esp+28]
@@ -395,13 +411,13 @@ pm_print_stack:
     loop .line
     ret
 
-pm_banner db 'Ghost OS v1.4.5-alpha ghost32',13,13,0
+pm_banner db 'Ghost OS v1.5-alpha ghost32',13,13,0
 pm_memory_prefix db 'Memory: ',0
 pm_memory_suffix db ' MB detected',13,0
 pm_heap_ready_msg db 'Heap initialized',13,0
 pm_prompt db 'ghost32> ',0
-pm_help_msg db 'Commands: help clear cls echo version mem heapinfo regs stack uptime panic pages memmap tasks yield ls cat browse run halt',13,0
-pm_version_msg db 'Ghost OS v1.4.5-alpha / stable GEX ABI',13,0
+pm_help_msg db 'Commands: help clear cls echo version mem heapinfo lspci netdev regs stack uptime panic pages memmap tasks yield ls cat browse run halt',13,0
+pm_version_msg db 'Ghost OS v1.5-alpha / PCI + NIC detect only',13,0
 pm_unknown_msg db 'Unknown command. Type help.',13,0
 pm_halt_msg db 'System halted.',13,0
 pm_run_usage_msg db 'Usage: run HELLO.GEX [args]',13,0
@@ -442,6 +458,8 @@ pm_cmd_run db 'run',0
 pm_cmd_version db 'version',0
 pm_cmd_mem db 'mem',0
 pm_cmd_heapinfo db 'heapinfo',0
+pm_cmd_lspci db 'lspci',0
+pm_cmd_netdev db 'netdev',0
 pm_cmd_regs db 'regs',0
 pm_cmd_stack db 'stack',0
 pm_cmd_uptime db 'uptime',0

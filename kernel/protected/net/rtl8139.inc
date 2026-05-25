@@ -202,3 +202,22 @@ rtl8139_print_mac:
     ret
 
 rtl8139_mac_msg db 'RTL8139 MAC: ',0
+
+rtl8139_setmac:
+    mov esi, pm_cmd_buffer
+
+    call pm_skip_first_word
+    call pm_skip_spaces
+
+    mov esi, rtl8139_setmac_msg
+    call pm_print_string
+
+    mov esi, pm_cmd_buffer
+    call pm_skip_first_word
+    call pm_skip_spaces
+    call pm_print_string
+
+    call pm_newline
+    ret
+
+rtl8139_setmac_msg db 'ARG=',0

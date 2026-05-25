@@ -91,7 +91,7 @@ rtl8139_txdemo:
     stosb
     mov al, 0B5h
     stosb
-
+    
     ; Payload "GHOST"
     mov al, 'G'
     stosb
@@ -163,12 +163,23 @@ rtl8139_txdump:
 
     mov esi, rtl8139_tx_buffer
     mov ecx, 42
+    xor ebx, ebx
 
 .dump_loop:
     lodsb
     call pm_print_hex8
+
     mov al, ' '
     call pm_print_char
+
+    inc ebx
+    cmp ebx, 16
+    jne .continue
+
+    call pm_newline
+    xor ebx, ebx
+
+.continue:
     loop .dump_loop
 
     call pm_newline
@@ -423,4 +434,231 @@ rtl8139_pktinfo:
     ret
 
 rtl8139_pktinfo_msg db 'Packet:',13
-                    db 'Ethernet -> IPv4 -> ICMP Echo Request',13,0
+                    db 'Ethernet -> ARP Request',13,0
+
+pktdump_eth_hdr db 'Ethernet Header',13,0
+pktdump_dst db '  DST MAC: ',0
+pktdump_src db '  SRC MAC: ',0
+pktdump_type db '  EtherType: ',0
+
+
+rtl8139_arpfake:
+    cmp byte [rtl8139_initialized], 1
+    jne .not_ready
+
+    mov edi, rtl8139_tx_buffer
+
+    ; Ethernet DEST broadcast
+    mov ecx, 6
+    mov al, 0FFh
+    rep stosb
+
+    ; Ethernet SRC MAC
+    mov esi, rtl8139_mac
+    mov ecx, 6
+
+.copy_mac:
+    lodsb
+    stosb
+    loop .copy_mac
+
+    ; EtherType ARP = 0x0806
+    mov al, 08h
+    stosb
+    mov al, 06h
+    stosb
+
+    ; Hardware type Ethernet
+    mov al, 00h
+    stosb
+    mov al, 01h
+    stosb
+
+    ; Protocol IPv4
+    mov al, 08h
+    stosb
+    mov al, 00h
+    stosb
+
+    ; Hardware size
+    mov al, 06h
+    stosb
+
+    ; Protocol size
+    mov al, 04h
+    stosb
+
+    ; Opcode request
+    mov al, 00h
+    stosb
+    mov al, 01h
+    stosb
+
+    ; Sender MAC
+    mov esi, rtl8139_mac
+    mov ecx, 6
+
+.sender_mac:
+    lodsb
+    stosb
+    loop .sender_mac
+
+    ; Sender IP = 10.0.2.15
+    mov al, 0Ah
+    stosb
+    mov al, 00h
+    stosb
+    mov al, 02h
+    stosb
+    mov al, 0Fh
+    stosb
+
+    ; Target MAC = 00:00:00:00:00:00
+    xor eax, eax
+    mov ecx, 6
+    rep stosb
+
+    ; Target IP = 10.0.2.2
+    mov al, 0Ah
+    stosb
+    mov al, 00h
+    stosb
+    mov al, 02h
+    stosb
+    mov al, 02h
+    stosb
+
+    inc dword [rtl8139_tx_count]
+
+    mov esi, rtl8139_arpfake_msg
+    call pm_print_string
+    ret
+
+.not_ready:
+    inc dword [rtl8139_error_count]
+    mov esi, rtl8139_not_ready_msg
+    call pm_print_string
+    ret
+
+rtl8139_arpfake_msg db 'Fake ARP request packet built',13,0
+
+rtl8139_pktdump:
+    mov esi, pktdump_eth_hdr
+    call pm_print_string
+
+    ; DST MAC
+    mov esi, pktdump_dst
+    call pm_print_string
+
+    mov esi, rtl8139_tx_buffer
+    call rtl8139_dump_mac
+    call pm_newline
+
+    ; SRC MAC
+    mov esi, pktdump_src
+    call pm_print_string
+
+    mov esi, rtl8139_tx_buffer + 6
+    call rtl8139_dump_mac
+    call pm_newline
+
+    ; EtherType
+    mov esi, pktdump_type
+    call pm_print_string
+
+    mov esi, rtl8139_tx_buffer + 12
+
+    lodsb
+    call pm_print_hex8
+
+    mov al, ' '
+    call pm_print_char
+
+    lodsb
+    call pm_print_hex8
+
+    call pm_newline
+
+    mov esi, pktdump_arp_hdr
+    call pm_print_string
+
+    mov esi, pktdump_arp_opcode
+    call pm_print_string
+    mov esi, rtl8139_tx_buffer + 20
+    lodsb
+    call pm_print_hex8
+    mov al, ' '
+    call pm_print_char
+    lodsb
+    call pm_print_hex8
+    call pm_newline
+
+    mov esi, pktdump_sender_mac
+    call pm_print_string
+    mov esi, rtl8139_tx_buffer + 22
+    call rtl8139_dump_mac
+    call pm_newline
+
+    mov esi, pktdump_sender_ip
+    call pm_print_string
+    mov esi, rtl8139_tx_buffer + 28
+    call rtl8139_dump_ip
+    call pm_newline
+
+    mov esi, pktdump_target_mac
+    call pm_print_string
+    mov esi, rtl8139_tx_buffer + 32
+    call rtl8139_dump_mac
+    call pm_newline
+
+    mov esi, pktdump_target_ip
+    call pm_print_string
+    mov esi, rtl8139_tx_buffer + 38
+    call rtl8139_dump_ip
+    call pm_newline
+
+    ret
+
+rtl8139_dump_ip:
+    mov ecx, 4
+
+.loop:
+    lodsb
+    movzx eax, al
+    call pm_print_uint32
+
+    cmp ecx, 1
+    je .done
+
+    mov al, '.'
+    call pm_print_char
+
+    loop .loop
+
+.done:
+    ret
+
+pktdump_arp_hdr db 'ARP Header',13,0
+pktdump_arp_opcode db '  Opcode: ',0
+pktdump_sender_mac db '  Sender MAC: ',0
+pktdump_sender_ip db '  Sender IP : ',0
+pktdump_target_mac db '  Target MAC: ',0
+pktdump_target_ip db '  Target IP : ',0
+
+rtl8139_dump_mac:
+    mov ecx, 6
+
+.loop:
+    lodsb
+    call pm_print_hex8
+
+    cmp ecx, 1
+    je .done
+
+    mov al, ' '
+    call pm_print_char
+
+    loop .loop
+
+.done:
+    ret

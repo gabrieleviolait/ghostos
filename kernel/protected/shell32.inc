@@ -155,6 +155,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_pingfake
 
+    mov edi, pm_cmd_arpfake
+    call pm_starts_with_word
+    jc pm_do_arpfake
+
     mov edi, pm_cmd_txdemo
     call pm_starts_with_word
     jc pm_do_txdemo
@@ -166,6 +170,10 @@ shell32_loop:
     mov edi, pm_cmd_pktinfo
     call pm_starts_with_word
     jc pm_do_pktinfo
+
+    mov edi, pm_cmd_pktdump
+    call pm_starts_with_word
+    jc pm_do_pktdump
 
     mov edi, pm_cmd_rxdump
     call pm_starts_with_word
@@ -359,6 +367,10 @@ pm_do_pingfake:
     call rtl8139_pingfake
     jmp shell32_loop
 
+pm_do_arpfake:
+    call rtl8139_arpfake
+    jmp shell32_loop
+
 pm_do_txdemo:
     call rtl8139_txdemo
     jmp shell32_loop
@@ -369,6 +381,10 @@ pm_do_txdump:
 
 pm_do_pktinfo:
     call rtl8139_pktinfo
+    jmp shell32_loop
+
+pm_do_pktdump:
+    call rtl8139_pktdump
     jmp shell32_loop
 
 pm_do_rxdump:
@@ -512,7 +528,7 @@ pm_memory_prefix db 'Memory: ',0
 pm_memory_suffix db ' MB detected',13,0
 pm_heap_ready_msg db 'Heap initialized',13,0
 pm_prompt db 'ghost32> ',0
-pm_help_msg db 'Commands: help clear cls echo version mem heapinfo lspci netdev netup netstat mac setmac randommac txdemo txdump pktinfo pingfake rxdump netreset netclear regs stack uptime panic pages memmap tasks yield ls cat browse run halt',13,0
+pm_help_msg db 'Commands: help clear cls echo version mem heapinfo lspci netdev netup netstat mac setmac randommac txdemo txdump pktdump pktinfo pingfake arpfake rxdump netreset netclear regs stack uptime panic pages memmap tasks yield ls cat browse run halt',13,0
 pm_version_msg db 'Ghost OS v1.5.5-alpha / RTL8139 raw ethernet skeleton',13,0
 pm_unknown_msg db 'Unknown command. Type help.',13,0
 pm_halt_msg db 'System halted.',13,0
@@ -562,9 +578,11 @@ pm_cmd_mac db 'mac',0
 pm_cmd_setmac db 'setmac',0
 pm_cmd_randommac db 'randommac',0
 pm_cmd_pingfake db 'pingfake',0
+pm_cmd_arpfake db 'arpfake',0
 pm_cmd_txdemo db 'txdemo',0
 pm_cmd_txdump db 'txdump',0
 pm_cmd_pktinfo db 'pktinfo',0
+pm_cmd_pktdump db 'pktdump',0
 pm_cmd_rxdump db 'rxdump',0
 pm_cmd_netreset db 'netreset',0
 pm_cmd_netclear db 'netclear',0
@@ -577,3 +595,4 @@ pm_cmd_memmap db 'memmap',0
 pm_cmd_tasks db 'tasks',0
 pm_cmd_yield db 'yield',0
 pm_cmd_halt db 'halt',0
+

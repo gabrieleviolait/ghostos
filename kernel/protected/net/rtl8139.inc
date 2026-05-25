@@ -672,3 +672,28 @@ rtl8139_dump_mac:
 
 .done:
     ret
+
+rtl8139_txreal:
+    cmp byte [rtl8139_initialized], 1
+    jne .not_ready
+
+    cmp dword [rtl8139_tx_len], 0
+    je .no_packet
+
+    mov esi, rtl8139_txreal_ready_msg
+    call pm_print_string
+    ret
+
+.no_packet:
+    mov esi, rtl8139_txreal_no_packet_msg
+    call pm_print_string
+    ret
+
+.not_ready:
+    inc dword [rtl8139_error_count]
+    mov esi, rtl8139_not_ready_msg
+    call pm_print_string
+    ret
+
+rtl8139_txreal_ready_msg db 'RTL8139 TX ready: packet present',13,0
+rtl8139_txreal_no_packet_msg db 'RTL8139 TX failed: no packet built',13,0

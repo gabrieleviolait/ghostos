@@ -27,6 +27,7 @@ rtl8139_netup:
     mov esi, rtl8139_netup_msg
     call pm_print_string
     mov byte [rtl8139_initialized], 1
+    call rtl8139_rx_init
     ret
 
 rtl8139_netup_msg db 'RTL8139 netup skeleton OK',13,0
@@ -59,6 +60,13 @@ rtl8139_netstat:
     mov eax, [rtl8139_error_count]
     call pm_print_uint32
     call pm_newline
+
+    mov esi, rtl8139_rxready_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_rx_ready]
+    call pm_print_uint32
+    call pm_newline
+
     ret
 
 rtl8139_status_msg db 'RTL8139 status:',13,0
@@ -66,6 +74,7 @@ rtl8139_init_msg   db 'initialized=',0
 rtl8139_tx_msg     db 'tx_count=',0
 rtl8139_rx_msg     db 'rx_count=',0
 rtl8139_err_msg    db 'errors=',0
+rtl8139_rxready_msg db 'rx_ready=',0
 
 rtl8139_txdemo:
     cmp byte [rtl8139_initialized], 1
@@ -196,6 +205,11 @@ rtl8139_dump_msg db 'TX frame dump:',13,0
 
 rtl8139_tx_buffer:
 times 64 db 0
+
+rtl8139_rx_buffer:
+times 8192+16+1500 db 0
+
+rtl8139_rx_ready db 0
 
 rtl8139_print_mac:
     mov esi, rtl8139_mac_msg
@@ -725,3 +739,17 @@ rtl8139_txstatus:
     ret
 
 rtl8139_txstatus_msg db 'RTL8139 TSD0: ',0
+
+rtl8139_rx_init:
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_RBSTART
+    mov eax, rtl8139_rx_buffer
+    out dx, eax
+
+    mov byte [rtl8139_rx_ready], 1
+
+    mov esi, rtl8139_rx_ready_msg
+    call pm_print_string
+    ret
+
+rtl8139_rx_ready_msg db 'RTL8139 RX buffer ready',13,0

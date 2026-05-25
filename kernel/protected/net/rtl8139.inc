@@ -15,6 +15,9 @@ rtl8139_tx_count dd 0
 rtl8139_rx_count dd 0
 rtl8139_error_count dd 0
 
+rtl8139_mac:
+db 52h,54h,00h,12h,34h,56h
+
 rtl8139_netup:
     mov esi, rtl8139_netup_msg
     call pm_print_string
@@ -72,19 +75,14 @@ rtl8139_txdemo:
     mov al, 0FFh
     rep stosb
 
-    ; SRC MAC 52:54:00:12:34:56
-    mov al, 52h
+    ; SRC MAC from rtl8139_mac
+    mov esi, rtl8139_mac
+    mov ecx, 6
+
+.copy_mac:
+    lodsb
     stosb
-    mov al, 54h
-    stosb
-    mov al, 00h
-    stosb
-    mov al, 12h
-    stosb
-    mov al, 34h
-    stosb
-    mov al, 56h
-    stosb
+    loop .copy_mac
 
     ; EtherType 0x88B5
     mov al, 88h

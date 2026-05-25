@@ -209,15 +209,64 @@ rtl8139_setmac:
     call pm_skip_first_word
     call pm_skip_spaces
 
-    mov esi, rtl8139_setmac_msg
-    call pm_print_string
+    cmp byte [esi], 0
+    je .usage
 
-    mov esi, pm_cmd_buffer
-    call pm_skip_first_word
-    call pm_skip_spaces
-    call pm_print_string
+    ; first hex char
+    mov al, [esi]
+    call hex_char_to_nibble
+    shl al, 4
+    mov bl, al
 
-    call pm_newline
+    ; second hex char
+    inc esi
+    mov al, [esi]
+    call hex_char_to_nibble
+
+    or al, bl
+
+    mov [rtl8139_mac], al
+
+    mov esi, rtl8139_setmac_ok
+    call pm_print_string
     ret
 
-rtl8139_setmac_msg db 'ARG=',0
+.usage:
+    mov esi, rtl8139_setmac_usage
+    call pm_print_string
+    ret
+
+rtl8139_setmac_ok db 'MAC byte0 updated',13,0
+rtl8139_setmac_usage db 'Usage: setmac AA',13,0
+
+hex_char_to_nibble:
+    cmp al, '0'
+    jb .bad
+    cmp al, '9'
+    jbe .num
+
+    cmp al, 'A'
+    jb .lower
+    cmp al, 'F'
+    jbe .upper
+
+.lower:
+    cmp al, 'a'
+    jb .bad
+    cmp al, 'f'
+    ja .bad
+
+    sub al, 'a' - 10
+    ret
+
+.upper:
+    sub al, 'A' - 10
+    ret
+
+.num:
+    sub al, '0'
+    ret
+
+.bad:
+    xor al, al
+    ret

@@ -464,8 +464,8 @@ pm_memory_prefix db 'Memory: ',0
 pm_memory_suffix db ' MB detected',13,0
 pm_heap_ready_msg db 'Heap initialized',13,0
 pm_prompt db 'ghost32> ',0
-pm_help_msg db 'Commands: help clear cls echo version mem heapinfo lspci netdev regs stack uptime panic pages memmap tasks yield ls cat browse run halt',13,0
-pm_version_msg db 'Ghost OS v1.5-alpha / PCI + NIC detect only',13,0
+pm_help_msg db 'Commands: help clear cls echo version mem heapinfo lspci netdev netup netstat txdemo rxdump netreset netclear regs stack uptime panic pages memmap tasks yield ls cat browse run halt',13,0
+pm_version_msg db 'Ghost OS v1.5.5-alpha / RTL8139 raw ethernet skeleton',13,0
 pm_unknown_msg db 'Unknown command. Type help.',13,0
 pm_halt_msg db 'System halted.',13,0
 pm_run_usage_msg db 'Usage: run HELLO.GEX [args]',13,0

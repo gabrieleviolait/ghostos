@@ -1,4 +1,4 @@
-; Ghost OS v1.2-alpha bootloader
+; Ghost OS v1.3-alpha bootloader
 ; FAT12-compatible boot sector.
 ; Relocates itself above the kernel load area, then loads kernel sectors.
 
@@ -183,7 +183,7 @@ sectors_left dw 0
 current_lba  dw 0
 kernel_dest  dw 0
 
-boot_msg db 'Ghost OS bootloader v1.2-alpha',13,10
+boot_msg db 'Ghost OS bootloader v1.3-alpha',13,10
          db 'Loading kernel...',13,10,0
 
 ok_msg db 'Kernel loaded.',13,10,0

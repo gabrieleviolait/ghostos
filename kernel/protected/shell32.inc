@@ -107,6 +107,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_browse
 
+    mov edi, pm_cmd_run
+    call pm_starts_with_word
+    jc pm_do_run
+
     mov edi, pm_cmd_version
     call pm_starts_with_word
     jc pm_do_version
@@ -224,6 +228,20 @@ pm_do_browse:
     call pm_print_fat12_error
     jmp shell32_loop
 
+pm_do_run:
+    mov esi, pm_cmd_buffer
+    call pm_skip_first_word
+    call pm_skip_spaces
+    cmp byte [esi], 0
+    je .usage
+    call pm_gex_run
+    jmp shell32_loop
+
+.usage:
+    mov esi, pm_run_usage_msg
+    call pm_print_string
+    jmp shell32_loop
+
 pm_do_version:
     mov esi, pm_version_msg
     call pm_print_string
@@ -258,7 +276,7 @@ pm_do_halt:
     call pm_print_string
     jmp pm_halt
 
-pm_banner db 'Ghost OS v1.2-alpha 32-bit shell',13
+pm_banner db 'Ghost OS v1.3-alpha 32-bit shell',13
           db 'Protected mode, paging, heap, cooperative tasks.',13,13,0
 pm_memory_prefix db 'Memory: ',0
 pm_memory_suffix db ' MB detected',13,0
@@ -271,6 +289,7 @@ pm_help_msg db 'Commands:',13
             db '  ls         list FAT12 root files',13
             db '  cat FILE   print FAT12 text file',13
             db '  browse FILE render .GHT page',13
+            db '  run FILE   run .GEX program',13
             db '  version    show version',13
             db '  mem        show memory/task startup status',13
             db '  heapinfo   show heap allocator state',13
@@ -279,9 +298,10 @@ pm_help_msg db 'Commands:',13
             db '  tasks      show task table summary',13
             db '  yield      run cooperative demo task once',13
             db '  halt       stop CPU',13,0
-pm_version_msg db 'Ghost OS v1.2-alpha / protected memory runtime',13,0
+pm_version_msg db 'Ghost OS v1.3-alpha / protected .GEX loader',13,0
 pm_unknown_msg db 'Unknown command. Type help.',13,0
 pm_halt_msg db 'System halted.',13,0
+pm_run_usage_msg db 'Usage: run HELLO.GEX',13,0
 
 pm_cmd_help db 'help',0
 pm_cmd_clear db 'clear',0
@@ -290,6 +310,7 @@ pm_cmd_echo db 'echo',0
 pm_cmd_ls db 'ls',0
 pm_cmd_cat db 'cat',0
 pm_cmd_browse db 'browse',0
+pm_cmd_run db 'run',0
 pm_cmd_version db 'version',0
 pm_cmd_mem db 'mem',0
 pm_cmd_heapinfo db 'heapinfo',0

@@ -1,6 +1,6 @@
 # Ghost OS roadmap
 
-Versione corrente: v1.2-alpha
+Versione corrente: v1.3-alpha
 
 ## Fase 0 - v0.5.2 stabile
 
@@ -117,3 +117,11 @@ Versione corrente: v1.2-alpha
 - Fatto: heap bump allocator con header, statistiche e `kfree` LIFO-safe.
 - Fatto: comandi `heapinfo`, `pages`, `memmap`.
 - Design-only: formato `.GEX` documentato per v1.3, senza loader runtime.
+
+## v1.3-alpha - first .GEX loader
+
+- Fatto: comando protected-mode `run FILE`.
+- Fatto: validazione header `.GEX` con magic `GEX1`, entry, load address, size e flags.
+- Fatto: loader ring 0 minimale con load fisso a `0x00180000`.
+- Fatto: syscall table minimale `print`, `read`, `exit`.
+- Fatto: sample `HELLO.GEX` buildato da NASM e copiato nella FAT12 image.

@@ -5,6 +5,7 @@ BOOT=boot/boot.asm
 KERNEL=kernel/kernel.asm
 PYTHON?=python3
 PAGES=$(wildcard pages/*.GHT)
+GEX_PROGRAMS=$(BUILD)/HELLO.GEX
 IMG=$(BUILD)/$(PROJECT).img
 ISO=$(BUILD)/$(PROJECT).iso
 
@@ -22,10 +23,13 @@ check-img:
 check-iso:
 	@command -v xorriso >/dev/null || (echo "Missing xorriso. Install with: sudo apt install xorriso" && exit 1)
 
-img: $(BUILD) check-img
+$(BUILD)/HELLO.GEX: programs/hello_gex.asm | $(BUILD)
+	nasm -f bin $< -o $@
+
+img: $(BUILD) check-img $(GEX_PROGRAMS)
 	nasm -f bin $(BOOT) -o $(BUILD)/boot.bin
 	nasm -f bin $(KERNEL) -o $(BUILD)/kernel.bin
-	$(PYTHON) tools/mkfat12.py $(IMG) $(BUILD)/boot.bin $(BUILD)/kernel.bin $(PAGES)
+	$(PYTHON) tools/mkfat12.py $(IMG) $(BUILD)/boot.bin $(BUILD)/kernel.bin $(PAGES) $(GEX_PROGRAMS)
 	@echo "Created $(IMG)"
 
 iso: img check-iso

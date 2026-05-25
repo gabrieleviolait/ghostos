@@ -29,6 +29,10 @@ pm_idt_init:
     mov eax, pm_irq1_keyboard
     call pm_set_idt_gate
 
+    mov ebx, 0x20
+    mov eax, pm_irq0_timer
+    call pm_set_idt_gate
+
     mov ebx, 0x26
     mov eax, pm_irq6_floppy
     call pm_set_idt_gate

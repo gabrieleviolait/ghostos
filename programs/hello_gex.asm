@@ -1,4 +1,4 @@
-; Sample Ghost Executable for the v1.3-alpha loader.
+; Sample Ghost Executable for the v1.4.5-alpha loader.
 
 [BITS 32]
 
@@ -6,6 +6,7 @@ GEX_LOAD_ADDR equ 0x00180000
 GEX_HEADER_SIZE equ 32
 SYS_PRINT equ 0
 SYS_EXIT equ 2
+GEX_META_SYSCALL_OFF equ 16
 
 [ORG GEX_LOAD_ADDR - GEX_HEADER_SIZE]
 
@@ -18,13 +19,13 @@ SYS_EXIT equ 2
 
 image_start:
 start:
-    mov eax, SYS_PRINT
+    mov edx, SYS_PRINT
     mov esi, hello_msg
-    call edx
+    call dword [ebp+GEX_META_SYSCALL_OFF]
 
-    xor ebx, ebx
-    mov eax, SYS_EXIT
-    call edx
+    xor esi, esi
+    mov edx, SYS_EXIT
+    call dword [ebp+GEX_META_SYSCALL_OFF]
     ret
 
 hello_msg db 'Hello from HELLO.GEX',13,0

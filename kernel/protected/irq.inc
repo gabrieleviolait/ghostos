@@ -44,7 +44,7 @@ pm_pic_remap:
     out 0xA1, al
     call pm_io_wait
 
-    mov al, 10111101b
+    mov al, 10111100b
     out 0x21, al
     call pm_io_wait
     mov al, 11111111b
@@ -53,6 +53,16 @@ pm_pic_remap:
 
     pop eax
     ret
+
+pm_irq0_timer:
+    pushad
+
+    inc dword [pm_system_ticks]
+    mov al, 0x20
+    out 0x20, al
+
+    popad
+    iretd
 
 pm_irq1_keyboard:
     pushad
@@ -137,3 +147,5 @@ pm_irq6_floppy:
 
     popad
     iretd
+
+pm_system_ticks dd 0

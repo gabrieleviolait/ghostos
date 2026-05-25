@@ -1,6 +1,6 @@
 # Ghost OS roadmap
 
-Versione corrente: v1.4-beta
+Versione corrente: v1.4.5-alpha
 
 ## Fase 0 - v0.5.2 stabile
 
@@ -143,3 +143,15 @@ Versione corrente: v1.4-beta
 - Fatto: `KERNEL_SIZE = 65536` byte.
 - Fatto: bootloader relocation e stack real-mode spostati sopra il kernel espanso.
 - Nessuna nuova feature utente; resta una release di layout/stabilizzazione.
+
+## v1.4.5-alpha - runtime ABI and diagnostics
+
+- Fatto: `kernel/protected/syscalls.inc` centralizza numeri e dispatch syscall.
+- Fatto: ABI stabile `.GEX`: `EDX` numero syscall, `ESI` arg1, `EDI` arg2,
+  `ECX` lunghezza/opzionale, `EAX` ritorno.
+- Fatto: syscall `get_version` e `get_ticks`.
+- Fatto: metadata runtime `.GEX` con `argc`, `argv`, puntatore syscall e versione.
+- Fatto: `run HELLO.GEX hello world` passa argomenti e stampa il codice di uscita.
+- Fatto: comandi `regs`, `stack`, `uptime`, `panic`.
+- Fatto: heap con guard di coda, contatori bad-free/corruzione e sanity check.
+- Fuori scope: networking, TCP/IP, SOCKS5, Tor, GUI e multimedia.

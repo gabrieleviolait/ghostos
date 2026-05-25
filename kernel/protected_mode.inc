@@ -5,6 +5,7 @@
 %include "kernel/protected/irq.inc"
 %include "kernel/protected/paging.inc"
 %include "kernel/protected/memory.inc"
+%include "kernel/protected/page_alloc.inc"
 %include "kernel/protected/heap.inc"
 %include "kernel/protected/tasks.inc"
 %include "kernel/protected/keyboard.inc"

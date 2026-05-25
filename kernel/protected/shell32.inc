@@ -115,6 +115,18 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_mem
 
+    mov edi, pm_cmd_heapinfo
+    call pm_starts_with_word
+    jc pm_do_heapinfo
+
+    mov edi, pm_cmd_pages
+    call pm_starts_with_word
+    jc pm_do_pages
+
+    mov edi, pm_cmd_memmap
+    call pm_starts_with_word
+    jc pm_do_memmap
+
     mov edi, pm_cmd_tasks
     call pm_starts_with_word
     jc pm_do_tasks
@@ -175,8 +187,7 @@ pm_do_cat:
     jmp shell32_loop
 
 .error:
-    mov esi, cat_error_msg
-    call pm_print_string
+    call pm_print_fat12_error
     jmp shell32_loop
 
 pm_do_browse:
@@ -210,8 +221,7 @@ pm_do_browse:
     jmp shell32_loop
 
 .load_error:
-    mov esi, browse_error_msg
-    call pm_print_string
+    call pm_print_fat12_error
     jmp shell32_loop
 
 pm_do_version:
@@ -221,6 +231,18 @@ pm_do_version:
 
 pm_do_mem:
     call pm_print_system_status
+    jmp shell32_loop
+
+pm_do_heapinfo:
+    call pm_print_heap_info
+    jmp shell32_loop
+
+pm_do_pages:
+    call pm_print_page_stats
+    jmp shell32_loop
+
+pm_do_memmap:
+    call pm_print_memmap
     jmp shell32_loop
 
 pm_do_tasks:
@@ -236,7 +258,7 @@ pm_do_halt:
     call pm_print_string
     jmp pm_halt
 
-pm_banner db 'Ghost OS v1.0-beta 32-bit shell',13
+pm_banner db 'Ghost OS v1.2-alpha 32-bit shell',13
           db 'Protected mode, paging, heap, cooperative tasks.',13,13,0
 pm_memory_prefix db 'Memory: ',0
 pm_memory_suffix db ' MB detected',13,0
@@ -251,10 +273,13 @@ pm_help_msg db 'Commands:',13
             db '  browse FILE render .GHT page',13
             db '  version    show version',13
             db '  mem        show memory/task startup status',13
+            db '  heapinfo   show heap allocator state',13
+            db '  pages      show physical page allocator state',13
+            db '  memmap     show BIOS E820 map',13
             db '  tasks      show task table summary',13
             db '  yield      run cooperative demo task once',13
             db '  halt       stop CPU',13,0
-pm_version_msg db 'Ghost OS v1.0-beta / protected runtime + FAT12',13,0
+pm_version_msg db 'Ghost OS v1.2-alpha / protected memory runtime',13,0
 pm_unknown_msg db 'Unknown command. Type help.',13,0
 pm_halt_msg db 'System halted.',13,0
 
@@ -267,6 +292,9 @@ pm_cmd_cat db 'cat',0
 pm_cmd_browse db 'browse',0
 pm_cmd_version db 'version',0
 pm_cmd_mem db 'mem',0
+pm_cmd_heapinfo db 'heapinfo',0
+pm_cmd_pages db 'pages',0
+pm_cmd_memmap db 'memmap',0
 pm_cmd_tasks db 'tasks',0
 pm_cmd_yield db 'yield',0
 pm_cmd_halt db 'halt',0

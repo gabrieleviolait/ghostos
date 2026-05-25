@@ -1,13 +1,13 @@
 # Ghost OS roadmap
 
-Versione corrente: v1.0-beta
+Versione corrente: v1.2-alpha
 
 ## Fase 0 - v0.5.2 stabile
 
 - Checkpoint v0.5.2 allineato in bootloader, kernel e messaggi.
 - Legacy v0.5.x: bootloader con `KERNEL_SECTORS = 32`.
 - Legacy v0.5.x: kernel fissato a `KERNEL_SIZE = 16384` byte.
-- Da v1.0-beta: kernel esteso a 64 settori / 32768 byte per paging, IDT e bitmap frame.
+- Da v1.2-alpha: kernel esteso a 64 settori / 32768 byte per paging, IDT e bitmap frame.
 - Comandi base da verificare: `help`, `gui`, `browse`, `calc`, `color`, backspace.
 
 ## Fase 1 - modularizzazione minima
@@ -109,3 +109,11 @@ Versione corrente: v1.0-beta
 - Fatto: panic screen per eccezioni fatali in protected mode.
 - Fatto: `ghost32>` legge FAT12 read-only con `ls`, `cat` e `browse`.
 - Fatto: driver floppy protected-mode minimale via FDC/DMA, senza BIOS `int 13h`.
+
+## v1.2-alpha - protected memory runtime
+
+- Fatto: errori FAT12 in `ghost32>` distinti tra nome invalido, file mancante, disco e buffer troppo piccolo.
+- Fatto: page allocator con conteggi total/managed/free/used.
+- Fatto: heap bump allocator con header, statistiche e `kfree` LIFO-safe.
+- Fatto: comandi `heapinfo`, `pages`, `memmap`.
+- Design-only: formato `.GEX` documentato per v1.3, senza loader runtime.

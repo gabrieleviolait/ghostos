@@ -13,6 +13,11 @@ FDC_CMD_RECALIBRATE equ 0x07
 FDC_CMD_SEEK equ 0x0F
 FDC_CMD_READ_DATA equ 0xE6
 FDC_DRIVE0_ON equ 0x1C
+PM_FAT12_ERR_NONE equ 0
+PM_FAT12_ERR_INVALID_NAME equ 1
+PM_FAT12_ERR_NOT_FOUND equ 2
+PM_FAT12_ERR_DISK equ 3
+PM_FAT12_ERR_TOO_LARGE equ 4
 
 pm_floppy_wait_irq:
     push ecx
@@ -381,6 +386,7 @@ pm_disk_read_sector:
     ret
 
 .fail:
+    mov byte [pm_fat12_error_code], PM_FAT12_ERR_DISK
     popad
     stc
     ret
@@ -517,8 +523,12 @@ pm_fat12_make_83:
 
 .ok:
     mov byte [fat12_status], 0
+    jmp .finish
 
 .bad:
+    mov byte [pm_fat12_error_code], PM_FAT12_ERR_INVALID_NAME
+
+.finish:
     pop edi
     pop ecx
     pop ebx
@@ -622,6 +632,13 @@ pm_fat12_find_file:
     pop ecx
 
 .done:
+    cmp byte [fat12_status], 0
+    je .pop_done
+    cmp byte [pm_fat12_error_code], PM_FAT12_ERR_NONE
+    jne .pop_done
+    mov byte [pm_fat12_error_code], PM_FAT12_ERR_NOT_FOUND
+
+.pop_done:
     popad
     cmp byte [fat12_status], 0
     je .return_ok
@@ -679,6 +696,7 @@ pm_fat12_get_next_cluster:
     ret
 
 pm_fat12_read_file:
+    mov byte [pm_fat12_error_code], PM_FAT12_ERR_NONE
     mov [pm_fat12_dest_ptr], edi
     mov [pm_fat12_max_bytes], ecx
     mov dword [pm_fat12_bytes_read], 0
@@ -691,7 +709,7 @@ pm_fat12_read_file:
     jc .fail
 
     cmp word [fat12_file_size_high], 0
-    jne .fail
+    jne .too_large
 
     movzx eax, word [fat12_file_size_low]
     mov [pm_fat12_bytes_left], eax
@@ -722,7 +740,7 @@ pm_fat12_read_file:
     mov ebx, [pm_fat12_max_bytes]
     sub ebx, [pm_fat12_bytes_read]
     cmp ebx, 0
-    je .done
+    je .too_large
     cmp eax, ebx
     jbe .copy
     mov eax, ebx
@@ -760,6 +778,11 @@ pm_fat12_read_file:
     ret
 
 .fail:
+    stc
+    ret
+
+.too_large:
+    mov byte [pm_fat12_error_code], PM_FAT12_ERR_TOO_LARGE
     stc
     ret
 
@@ -803,6 +826,7 @@ pm_fat12_print_entry_name:
     ret
 
 pm_fat12_list_root:
+    mov byte [pm_fat12_error_code], PM_FAT12_ERR_NONE
     call pm_fat12_init
     jc .fail
 
@@ -865,9 +889,61 @@ pm_fat12_list_root:
     ret
 
 .fail:
+    call pm_print_fat12_error
+    stc
+    ret
+
+pm_print_fat12_error:
+    mov esi, pm_fat12_error_prefix
+    call pm_print_string
+    mov al, [pm_fat12_error_code]
+    cmp al, PM_FAT12_ERR_INVALID_NAME
+    je .invalid
+    cmp al, PM_FAT12_ERR_NOT_FOUND
+    je .not_found
+    cmp al, PM_FAT12_ERR_DISK
+    je .disk
+    cmp al, PM_FAT12_ERR_TOO_LARGE
+    je .too_large
     mov esi, fat_error_msg
     call pm_print_string
-    stc
+    ret
+
+.invalid:
+    mov esi, pm_fat12_invalid_msg
+    call pm_print_string
+    ret
+
+.not_found:
+    mov esi, pm_fat12_not_found_msg
+    call pm_print_string
+    ret
+
+.too_large:
+    mov esi, pm_fat12_too_large_msg
+    call pm_print_string
+    ret
+
+.disk:
+    mov esi, pm_fat12_disk_msg
+    call pm_print_string
+    mov esi, pm_fat12_lba_msg
+    call pm_print_string
+    movzx eax, word [pm_fat12_lba]
+    call pm_print_uint32
+    mov esi, pm_fat12_st_msg
+    call pm_print_string
+    movzx eax, byte [pm_fdc_result]
+    call pm_print_hex32
+    mov al, '/'
+    call pm_print_char
+    movzx eax, byte [pm_fdc_result+1]
+    call pm_print_hex32
+    mov al, '/'
+    call pm_print_char
+    movzx eax, byte [pm_fdc_result+2]
+    call pm_print_hex32
+    call pm_newline
     ret
 
 pm_floppy_irq_fired db 0
@@ -884,3 +960,11 @@ pm_fat12_max_bytes dd 0
 pm_fat12_bytes_read dd 0
 pm_fat12_bytes_left dd 0
 pm_fat12_copy_count dd 0
+pm_fat12_error_code db 0
+pm_fat12_error_prefix db 'FAT12: ',0
+pm_fat12_invalid_msg db 'invalid 8.3 filename.',13,0
+pm_fat12_not_found_msg db 'file not found.',13,0
+pm_fat12_too_large_msg db 'file too large for buffer.',13,0
+pm_fat12_disk_msg db 'disk read failed. ',0
+pm_fat12_lba_msg db 'LBA=',0
+pm_fat12_st_msg db ' ST=',0

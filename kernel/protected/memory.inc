@@ -41,7 +41,7 @@ collect_e820_memory_map:
 
 pm_memory_init:
     call pm_detect_memory_mb
-    call pm_init_frame_bitmap
+    call pm_page_alloc_init
     call pm_init_paging
     call pm_heap_init
     ret
@@ -94,71 +94,39 @@ pm_detect_memory_mb:
     popad
     ret
 
-pm_init_frame_bitmap:
+pm_print_memmap:
+    cmp word [e820_count], 0
+    jne .have_map
+    mov esi, pm_memmap_none_msg
+    call pm_print_string
+    ret
+
+.have_map:
     pushad
+    mov esi, pm_memmap_header
+    call pm_print_string
+    movzx ecx, word [e820_count]
+    mov esi, e820_map
 
-    mov edi, pm_frame_bitmap
-    mov al, 0xFF
-    mov ecx, PM_FRAME_BITMAP_SIZE
-    cld
-    rep stosb
-
-    mov eax, 1024
-    mov ebx, [pm_detected_memory_mb]
-    shl ebx, 8
-
-.free_loop:
-    cmp eax, ebx
-    jae .done
-    call free_frame_by_index
-    inc eax
-    jmp .free_loop
-
-.done:
+.loop:
+    mov eax, [esi]
+    call pm_print_hex32
+    mov al, ' '
+    call pm_print_char
+    mov eax, [esi+8]
+    call pm_print_hex32
+    mov al, ' '
+    call pm_print_char
+    mov eax, [esi+16]
+    call pm_print_uint32
+    call pm_newline
+    add esi, E820_ENTRY_SIZE
+    loop .loop
     popad
-    ret
-
-alloc_frame:
-    push ebx
-    push ecx
-
-    xor eax, eax
-    mov ecx, PM_FRAME_COUNT
-
-.scan:
-    bt dword [pm_frame_bitmap], eax
-    jnc .found
-    inc eax
-    loop .scan
-
-    pop ecx
-    pop ebx
-    stc
-    ret
-
-.found:
-    bts dword [pm_frame_bitmap], eax
-    shl eax, 12
-    pop ecx
-    pop ebx
-    clc
-    ret
-
-free_frame:
-    push eax
-    shr eax, 12
-    cmp eax, PM_FRAME_COUNT
-    jae .done
-    btr dword [pm_frame_bitmap], eax
-.done:
-    pop eax
-    ret
-
-free_frame_by_index:
-    btr dword [pm_frame_bitmap], eax
     ret
 
 pm_detected_memory_mb dd PM_MAX_MEMORY_MB
 e820_count dw 0
 e820_map times E820_MAX_ENTRIES*E820_ENTRY_SIZE db 0
-pm_frame_bitmap times PM_FRAME_BITMAP_SIZE db 0
+pm_memmap_none_msg db 'No E820 memory map available.',13,0
+pm_memmap_header db 'Base       Length     Type',13,0

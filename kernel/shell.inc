@@ -41,6 +41,10 @@ shell_loop:
     call starts_with_word
     jc do_gui
 
+    mov di, cmd_desktop
+    call starts_with_word
+    jc do_gui
+
     mov di, cmd_browse
     call starts_with_word
     jc do_browse

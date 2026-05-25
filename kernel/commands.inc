@@ -11,10 +11,7 @@ do_clear:
     jmp shell_loop
 
 do_gui:
-    call clear_screen
-    call set_cursor_home
-    mov si, gui_msg
-    call print_string
+    call render_desktop
     jmp shell_loop
 
 do_about:

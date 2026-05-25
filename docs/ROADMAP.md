@@ -1,6 +1,6 @@
 # Ghost OS roadmap
 
-Versione corrente: v0.5.4
+Versione corrente: v0.5.5
 
 ## Fase 0 - v0.5.2 stabile
 
@@ -37,25 +37,46 @@ Versione corrente: v0.5.4
 
 ## v0.5.5 - windows/panels TUI
 
-- `draw_box`.
-- `draw_title`.
-- Dashboard/pannelli testuali per comando `desktop` o `gui`.
+- Fatto: `kernel/tui.inc`.
+- Fatto: `draw_char_at`, `print_at`, `draw_hline`, `draw_vline`.
+- Fatto: `draw_box`, `draw_title`, `clear_region`.
+- Fatto: layout con header, status panel, commands panel, browser panel, footer.
+- Fatto: `desktop` alias di `gui`.
 
 ## v0.6 - FAT12 filesystem
 
-- Lettura root directory FAT12.
-- Ricerca file 8.3.
-- Caricamento file in buffer.
-- Preparazione immagine floppy con file reali, non solo settori raw.
+- Cambiare immagine floppy da raw settori a FAT12 formattata.
+- Aggiornare `Makefile`: creare `ghostos.img`, formattare FAT12, scrivere bootloader nel primo settore, copiare kernel e file `.GHT`.
+- Bootloader: per ora puo' ancora caricare kernel da settori fissi; poi possibile caricamento di `KERNEL.BIN` da FAT12.
+- Creare `kernel/fat12.inc`.
+- Kernel: leggere boot sector FAT12.
+- Kernel: leggere root directory.
+- Kernel: trovare file 8.3.
+- Kernel: leggere cluster chain.
+- Kernel: caricare file in buffer.
+- Aggiungere `pages/HOME.GHT`, `pages/ABOUT.GHT`, `pages/HELP.GHT`.
+- Comandi nuovi: `ls`, `cat HOME.GHT`.
 
 ## v0.7 - load `.GHT` pages from disk
 
-- Comando `browse HOME.GHT`.
-- Parser minimale tag-like.
-- Rendering testuale di pagine locali.
+- `browser.inc` legge argomento dopo `browse`.
+- Se vuoto apre `HOME.GHT`.
+- Chiama `fat12_read_file`.
+- Carica file in `page_buffer`.
+- Renderizza testo.
+- Supporta pseudo-tag semplici: `<title>`, `<h1>`, `<p>`, `<hr>`, `<pre>`, `<a href="">`.
+- Link inizialmente solo visivi.
+- Poi supporto numeri link `[1]`, `[2]`.
+- Comandi: `browse`, `browse HOME.GHT`, `browse ABOUT.GHT`.
 
 ## v0.8 - protected mode
 
-- GDT minimale.
-- Salto 32-bit.
-- Demo VGA protected mode senza BIOS.
+- Creare `kernel/protected_mode.inc`.
+- Definire GDT.
+- Disabilitare interrupt.
+- Caricare GDTR.
+- Impostare bit PE in CR0.
+- Far jump far in codice 32-bit.
+- Stampare messaggio in VGA memory direttamente.
+- Halt.
+- Nota: demo sicura solo con messaggio `Protected mode entered`; la shell resta 16-bit per ora.

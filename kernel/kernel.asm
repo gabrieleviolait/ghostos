@@ -1,4 +1,4 @@
-; Ghost OS v0.5.4 kernel
+; Ghost OS v0.5.5 kernel
 ; Pure NASM 16-bit x86 real mode CLI/TUI OS.
 
 [BITS 16]
@@ -34,6 +34,7 @@ halt_cpu:
     jmp .hang
 
 %include "kernel/video_vga.inc"
+%include "kernel/tui.inc"
 %include "kernel/string.inc"
 %include "kernel/math.inc"
 %include "kernel/browser.inc"

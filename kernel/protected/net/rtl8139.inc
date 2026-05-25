@@ -105,3 +105,15 @@ rtl8139_netreset:
     ret
 
 rtl8139_reset_msg db 'RTL8139 driver state reset',13,0
+
+
+rtl8139_netclear:
+    mov dword [rtl8139_tx_count], 0
+    mov dword [rtl8139_rx_count], 0
+    mov dword [rtl8139_error_count], 0
+
+    mov esi, rtl8139_clear_msg
+    call pm_print_string
+    ret
+
+rtl8139_clear_msg db 'RTL8139 counters cleared',13,0

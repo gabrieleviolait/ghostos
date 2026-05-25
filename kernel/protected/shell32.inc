@@ -151,6 +151,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_netreset
 
+    mov edi, pm_cmd_netclear
+    call pm_starts_with_word
+    jc pm_do_netclear
+
     mov edi, pm_cmd_regs
     call pm_starts_with_word
     jc pm_do_regs
@@ -325,6 +329,10 @@ pm_do_rxdump:
 
 pm_do_netreset:
     call rtl8139_netreset
+    jmp shell32_loop
+
+pm_do_netclear:
+    call rtl8139_netclear
     jmp shell32_loop
 
 pm_do_regs:
@@ -505,6 +513,7 @@ pm_cmd_netstat db 'netstat',0
 pm_cmd_txdemo db 'txdemo',0
 pm_cmd_rxdump db 'rxdump',0
 pm_cmd_netreset db 'netreset',0
+pm_cmd_netclear db 'netclear',0
 pm_cmd_regs db 'regs',0
 pm_cmd_stack db 'stack',0
 pm_cmd_uptime db 'uptime',0

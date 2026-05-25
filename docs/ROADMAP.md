@@ -1,6 +1,6 @@
 # Ghost OS roadmap
 
-Versione corrente: v0.8
+Versione corrente: v0.9
 
 ## Fase 0 - v0.5.2 stabile
 
@@ -73,3 +73,17 @@ Versione corrente: v0.8
 - Fatto: stampa `Protected mode entered` direttamente in VGA memory.
 - Fatto: halt.
 - Nota: demo sicura e one-way; la shell resta 16-bit per ora.
+
+## v0.9 - protected mode shell
+
+- Fatto: ingresso stabile in protected mode all'avvio del kernel.
+- Fatto: GDT pulita con code/data flat 32-bit.
+- Fatto: IDT minimale.
+- Fatto: remap PIC 8259.
+- Fatto: IRQ tastiera abilitato.
+- Fatto: lettura scancode da porta `0x60`.
+- Fatto: conversione scancode ASCII base.
+- Fatto: keyboard buffer.
+- Fatto: `print_char` su VGA `0xB8000` 32-bit.
+- Fatto: `shell_loop` 32-bit.
+- Fatto: comandi minimi `help`, `clear`, `echo`, `version`, `halt`.

@@ -38,7 +38,7 @@ cmd_stress  db 'stress',0
 cmd_flood   db 'flood',0
 
 banner db '================================================',13
-       db '  Ghost OS v0.8',13
+       db '  Ghost OS v0.9',13
        db '  Minimal 16-bit Assembly OS / BIOS only',13
        db '================================================',13
        db '  Type help for commands. Type gui for dashboard.',13,13,0
@@ -65,7 +65,7 @@ help_msg db 'Commands:',13
          db '  halt           stop CPU',13,0
 
 desktop_title db 'Ghost OS',0
-desktop_header_line db 'v0.8  real mode shell  FAT12  .GHT  PM demo',0
+desktop_header_line db 'v0.9  protected mode shell  VGA  IRQ1 keyboard',0
 desktop_status_title db 'Status',0
 desktop_status_1 db 'Mode : real mode',0
 desktop_status_2 db 'Video: VGA text',0
@@ -84,12 +84,12 @@ desktop_browser_4 db 'Links are visual until the browser parser grows.',0
 desktop_footer_title db 'Footer',0
 desktop_footer_line db 'Ready. Protected mode demo is one-way: pmode halts.',0
 
-about_msg db 'Ghost OS v0.8',13
+about_msg db 'Ghost OS v0.9',13
           db 'Tiny educational OS written from scratch in NASM.',13
           db 'FAT12 read-only files, .GHT pages, protected mode demo.',13
           db 'Goal: small CLI-first assembly operating system.',13,0
 
-version_msg db 'Ghost OS v0.8 / x86 16-bit real mode / NASM',13,0
+version_msg db 'Ghost OS v0.9 / x86 protected mode shell / NASM',13,0
 
 unknown_msg db 'Unknown command. Type help.',13,0
 reboot_msg  db 'Rebooting...',13,0
@@ -100,7 +100,7 @@ result_msg  db 'Result: ',0
 ls_header   db 'FAT12 root directory:',13,0
 ls_empty_msg db '(no files)',13,0
 
-negative_msg db 'Result is negative. v0.8 displays unsigned results only.',13,0
+negative_msg db 'Result is negative. v0.9 displays unsigned results only.',13,0
 div_zero_msg db 'Division by zero.',13,0
 overflow_msg db 'Result is too large for uint16.',13,0
 calc_usage  db 'Usage: calc 12+34, calc 12-5, calc 7*8, or calc 20/4.',13,0

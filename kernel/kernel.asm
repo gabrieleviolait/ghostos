@@ -1,5 +1,5 @@
-; Ghost OS v0.8 kernel
-; Pure NASM 16-bit x86 real mode CLI/TUI OS.
+; Ghost OS v0.9 kernel
+; Enters protected mode and runs a minimal 32-bit shell.
 
 [BITS 16]
 [ORG 0x1000]
@@ -17,16 +17,7 @@ kernel_start:
     mov sp, STACK_TOP
     mov [boot_drive], dl
 
-    sti
-
-    call set_text_mode
-    call clear_screen
-    call set_cursor_home
-
-    mov si, banner
-    call print_string
-
-    call shell_loop
+    jmp enter_protected_mode_shell
 
 halt_cpu:
     cli

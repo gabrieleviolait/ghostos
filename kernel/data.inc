@@ -40,6 +40,7 @@ cmd_flood   db 'flood',0
 banner db '================================================',13
        db '  Ghost OS v1.5-alpha',13
        db '  Minimal 16-bit Assembly OS / BIOS only',13
+       db '  Created by www.gabrieleviola.it',13
        db '================================================',13
        db '  Type help for commands. Type gui for dashboard.',13,13,0
 

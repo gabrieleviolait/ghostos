@@ -147,6 +147,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_setmac
 
+    mov edi, pm_cmd_randommac
+    call pm_starts_with_word
+    jc pm_do_randommac
+
     mov edi, pm_cmd_txdemo
     call pm_starts_with_word
     jc pm_do_txdemo
@@ -337,6 +341,10 @@ pm_do_mac:
     
 pm_do_setmac:
     call rtl8139_setmac
+    jmp shell32_loop
+
+pm_do_randommac:
+    call rtl8139_randommac
     jmp shell32_loop
 
 pm_do_txdemo:
@@ -536,6 +544,7 @@ pm_cmd_netup db 'netup',0
 pm_cmd_netstat db 'netstat',0
 pm_cmd_mac db 'mac',0
 pm_cmd_setmac db 'setmac',0
+pm_cmd_randommac db 'randommac',0
 pm_cmd_txdemo db 'txdemo',0
 pm_cmd_txdump db 'txdump',0
 pm_cmd_rxdump db 'rxdump',0

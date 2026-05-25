@@ -17,6 +17,8 @@ rtl8139_error_count dd 0
 
 rtl8139_mac:
 db 52h,54h,00h,12h,34h,56h
+rtl8139_random_seed dd 12345678h
+
 
 rtl8139_netup:
     mov esi, rtl8139_netup_msg
@@ -212,8 +214,16 @@ rtl8139_setmac:
     cmp byte [esi], 0
     je .usage
 
+    mov edi, rtl8139_mac
+    mov ecx, 6
+
+.parse_byte:
+    call pm_skip_spaces
+
     ; first hex char
     mov al, [esi]
+    cmp al, 0
+    je .usage
     call hex_char_to_nibble
     shl al, 4
     mov bl, al
@@ -221,11 +231,15 @@ rtl8139_setmac:
     ; second hex char
     inc esi
     mov al, [esi]
+    cmp al, 0
+    je .usage
     call hex_char_to_nibble
 
     or al, bl
+    stosb
 
-    mov [rtl8139_mac], al
+    inc esi
+    loop .parse_byte
 
     mov esi, rtl8139_setmac_ok
     call pm_print_string
@@ -236,8 +250,9 @@ rtl8139_setmac:
     call pm_print_string
     ret
 
-rtl8139_setmac_ok db 'MAC byte0 updated',13,0
-rtl8139_setmac_usage db 'Usage: setmac AA',13,0
+
+rtl8139_setmac_ok db 'MAC updated',13,0
+rtl8139_setmac_usage db 'Usage: setmac AA BB CC DD EE FF',13,0
 
 hex_char_to_nibble:
     cmp al, '0'
@@ -270,3 +285,31 @@ hex_char_to_nibble:
 .bad:
     xor al, al
     ret
+
+rtl8139_random32:
+    mov eax, [rtl8139_random_seed]
+    imul eax, eax, 1664525
+    add eax, 1013904223
+    mov [rtl8139_random_seed], eax
+    ret
+
+rtl8139_randommac:
+    mov edi, rtl8139_mac
+    mov ecx, 6
+
+.fill:
+    call rtl8139_random32
+    stosb
+    loop .fill
+
+    ; locally administered
+    or byte [rtl8139_mac], 00000010b
+
+    ; unicast
+    and byte [rtl8139_mac], 11111110b
+
+    mov esi, rtl8139_randommac_msg
+    call pm_print_string
+    ret
+
+rtl8139_randommac_msg db 'Random MAC generated',13,0

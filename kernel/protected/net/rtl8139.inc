@@ -162,11 +162,11 @@ rtl8139_txdump:
     call pm_print_string
 
     mov esi, rtl8139_tx_buffer
-    mov ecx, 19
+    mov ecx, 42
 
 .dump_loop:
     lodsb
-    call pm_print_hex32
+    call pm_print_hex8
     mov al, ' '
     call pm_print_char
     loop .dump_loop
@@ -313,3 +313,114 @@ rtl8139_randommac:
     ret
 
 rtl8139_randommac_msg db 'Random MAC generated',13,0
+
+rtl8139_pingfake:
+    cmp byte [rtl8139_initialized], 1
+    jne .not_ready
+
+    mov edi, rtl8139_tx_buffer
+
+    ; Ethernet DEST broadcast
+    mov ecx, 6
+    mov al, 0FFh
+    rep stosb
+
+    ; Ethernet SRC rtl8139_mac
+    mov esi, rtl8139_mac
+    mov ecx, 6
+.copy_mac:
+    lodsb
+    stosb
+    loop .copy_mac
+
+    ; EtherType IPv4 0x0800
+    mov al, 08h
+    stosb
+    mov al, 00h
+    stosb
+
+    ; Minimal fake IPv4 header
+    mov al, 45h        ; version/IHL
+    stosb
+    mov al, 00h        ; DSCP
+    stosb
+    mov al, 00h        ; total length high
+    stosb
+    mov al, 1Ch        ; total length low = 28
+    stosb
+    mov al, 00h        ; ID
+    stosb
+    mov al, 01h
+    stosb
+    mov al, 00h        ; flags/fragment
+    stosb
+    mov al, 00h
+    stosb
+    mov al, 40h        ; TTL
+    stosb
+    mov al, 01h        ; ICMP
+    stosb
+    mov al, 00h        ; checksum placeholder
+    stosb
+    mov al, 00h
+    stosb
+
+    ; SRC IP 10.0.2.15
+    mov al, 0Ah
+    stosb
+    mov al, 00h
+    stosb
+    mov al, 02h
+    stosb
+    mov al, 0Fh
+    stosb
+
+    ; DST IP 10.0.2.2
+    mov al, 0Ah
+    stosb
+    mov al, 00h
+    stosb
+    mov al, 02h
+    stosb
+    mov al, 02h
+    stosb
+
+    ; ICMP echo request
+    mov al, 08h        ; type echo request
+    stosb
+    mov al, 00h        ; code
+    stosb
+    mov al, 00h        ; checksum placeholder
+    stosb
+    mov al, 00h
+    stosb
+    mov al, 12h        ; identifier
+    stosb
+    mov al, 34h
+    stosb
+    mov al, 00h        ; sequence
+    stosb
+    mov al, 01h
+    stosb
+
+    inc dword [rtl8139_tx_count]
+
+    mov esi, rtl8139_pingfake_msg
+    call pm_print_string
+    ret
+
+.not_ready:
+    inc dword [rtl8139_error_count]
+    mov esi, rtl8139_not_ready_msg
+    call pm_print_string
+    ret
+
+rtl8139_pingfake_msg db 'Fake ICMP echo packet built',13,0
+
+rtl8139_pktinfo:
+    mov esi, rtl8139_pktinfo_msg
+    call pm_print_string
+    ret
+
+rtl8139_pktinfo_msg db 'Packet:',13
+                    db 'Ethernet -> IPv4 -> ICMP Echo Request',13,0

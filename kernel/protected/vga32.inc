@@ -222,6 +222,30 @@ pm_print_hex32:
     popad
     ret
 
+pm_print_hex8:
+    push eax
+    push ebx
+
+    mov bl, al
+
+    mov al, bl
+    shr al, 4
+    call pm_print_hex_nibble
+
+    mov al, bl
+    and al, 0Fh
+    call pm_print_hex_nibble
+
+    pop ebx
+    pop eax
+    ret
+
+pm_print_hex_nibble:
+    and eax, 0Fh
+    mov al, [pm_hex_digits+eax]
+    call pm_print_char
+    ret
+
 pm_text_attr db 0x07
 pm_cursor_x db 0
 pm_cursor_y db 0

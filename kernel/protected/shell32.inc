@@ -139,6 +139,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_netstat
 
+    mov edi, pm_cmd_mac
+    call pm_starts_with_word
+    jc pm_do_mac
+
     mov edi, pm_cmd_txdemo
     call pm_starts_with_word
     jc pm_do_txdemo
@@ -321,6 +325,10 @@ pm_do_netup:
 
 pm_do_netstat:
     call rtl8139_netstat
+    jmp shell32_loop
+
+pm_do_mac:
+    call rtl8139_print_mac
     jmp shell32_loop
 
 pm_do_txdemo:
@@ -518,6 +526,7 @@ pm_cmd_lspci db 'lspci',0
 pm_cmd_netdev db 'netdev',0
 pm_cmd_netup db 'netup',0
 pm_cmd_netstat db 'netstat',0
+pm_cmd_mac db 'mac',0
 pm_cmd_txdemo db 'txdemo',0
 pm_cmd_txdump db 'txdump',0
 pm_cmd_rxdump db 'rxdump',0

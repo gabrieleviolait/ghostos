@@ -176,3 +176,29 @@ rtl8139_dump_msg db 'TX frame dump:',13,0
 
 rtl8139_tx_buffer:
 times 64 db 0
+
+rtl8139_print_mac:
+    mov esi, rtl8139_mac_msg
+    call pm_print_string
+
+    mov esi, rtl8139_mac
+    mov ecx, 6
+
+.loop:
+    lodsb
+    movzx eax, al
+    call pm_print_hex32
+
+    cmp ecx, 1
+    je .done
+
+    mov al, ':'
+    call pm_print_char
+
+    loop .loop
+
+.done:
+    call pm_newline
+    ret
+
+rtl8139_mac_msg db 'RTL8139 MAC: ',0

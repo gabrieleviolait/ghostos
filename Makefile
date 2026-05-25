@@ -28,7 +28,7 @@ $(BUILD)/HELLO.GEX: programs/hello_gex.asm | $(BUILD)
 
 img: $(BUILD) check-img $(GEX_PROGRAMS)
 	nasm -f bin $(BOOT) -o $(BUILD)/boot.bin
-	nasm -f bin $(KERNEL) -o $(BUILD)/kernel.bin
+	nasm -f bin -w-label-redef-late $(KERNEL) -o $(BUILD)/kernel.bin
 	$(PYTHON) tools/mkfat12.py $(IMG) $(BUILD)/boot.bin $(BUILD)/kernel.bin $(PAGES) $(GEX_PROGRAMS)
 	@echo "Created $(IMG)"
 

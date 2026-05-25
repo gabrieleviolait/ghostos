@@ -1,13 +1,13 @@
 # Ghost OS roadmap
 
-Versione corrente: v1.0
+Versione corrente: v1.0-beta
 
 ## Fase 0 - v0.5.2 stabile
 
 - Checkpoint v0.5.2 allineato in bootloader, kernel e messaggi.
 - Legacy v0.5.x: bootloader con `KERNEL_SECTORS = 32`.
 - Legacy v0.5.x: kernel fissato a `KERNEL_SIZE = 16384` byte.
-- Da v1.0: kernel esteso a 64 settori / 32768 byte per paging, IDT e bitmap frame.
+- Da v1.0-beta: kernel esteso a 64 settori / 32768 byte per paging, IDT e bitmap frame.
 - Comandi base da verificare: `help`, `gui`, `browse`, `calc`, `color`, backspace.
 
 ## Fase 1 - modularizzazione minima
@@ -89,7 +89,7 @@ Versione corrente: v1.0
 - Fatto: `shell_loop` 32-bit.
 - Fatto: comandi minimi `help`, `clear`, `echo`, `version`, `halt`.
 
-## v1.0 - memory manager + task abstraction
+## v1.0-beta - stabilization + protected runtime cleanup
 
 - Fatto: memory map BIOS E820 raccolta prima del protected mode.
 - Fatto: mappa E820 salvata in memoria kernel.
@@ -105,3 +105,5 @@ Versione corrente: v1.0
 - Fatto: `yield`.
 - Fatto: Task 1 shell.
 - Fatto: Task 2 demo counter.
+- Fatto: runtime protected mode diviso in `kernel/protected/*.inc`.
+- Fatto: panic screen per eccezioni fatali in protected mode.

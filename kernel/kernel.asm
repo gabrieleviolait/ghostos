@@ -1,5 +1,5 @@
-; Ghost OS v0.6 kernel
-; Real-mode shell with VGA TUI, FAT12 support and optional protected mode demo.
+; Ghost OS v1.0-beta kernel
+; Real-mode recovery shell plus protected-mode ghost32 runtime.
 
 [BITS 16]
 [ORG 0x1000]
@@ -16,6 +16,8 @@ kernel_start:
     mov ss, ax
     mov sp, STACK_TOP
     mov [boot_drive], dl
+
+    call collect_e820_memory_map
 
     call set_text_mode
     call clear_screen
@@ -40,7 +42,17 @@ halt_cpu:
 %include "kernel/math.inc"
 %include "kernel/fat12.inc"
 %include "kernel/browser.inc"
-%include "kernel/protected_mode.inc"
+%include "kernel/protected/gdt.inc"
+%include "kernel/protected/idt.inc"
+%include "kernel/protected/irq.inc"
+%include "kernel/protected/paging.inc"
+%include "kernel/protected/memory.inc"
+%include "kernel/protected/heap.inc"
+%include "kernel/protected/tasks.inc"
+%include "kernel/protected/keyboard.inc"
+%include "kernel/protected/vga32.inc"
+%include "kernel/protected/shell32.inc"
+[BITS 16]
 %include "kernel/commands.inc"
 %include "kernel/shell.inc"
 %include "kernel/data.inc"

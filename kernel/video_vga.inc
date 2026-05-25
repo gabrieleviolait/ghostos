@@ -1,4 +1,8 @@
 ; VGA text mode and BIOS keyboard I/O helpers.
+; Real-mode VGA text driver.
+; Uses fixed attribute 0x07 for stable rendering in QEMU curses/GTK.
+
+VGA_SAFE_ATTR equ 0x07
 
 set_text_mode:
     pusha
@@ -9,11 +13,9 @@ set_text_mode:
 
 set_cursor_home:
     pusha
-    mov ah, 0x02
-    mov bh, 0x00
-    mov dh, 0x00
-    mov dl, TEXT_LEFT_MARGIN
-    int 0x10
+    mov byte [cursor_x], TEXT_LEFT_MARGIN
+    mov byte [cursor_y], 0
+    call update_cursor
     popa
     ret
 
@@ -24,9 +26,10 @@ clear_screen:
     mov ax, 0xB800
     mov es, ax
     xor di, di
-    mov ah, [text_attr]
+
     mov al, ' '
-    mov cx, SCREEN_WIDTH*SCREEN_HEIGHT
+    mov ah, VGA_SAFE_ATTR
+    mov cx, SCREEN_WIDTH * SCREEN_HEIGHT
 
 .clear_loop:
     stosw
@@ -45,21 +48,22 @@ scroll_up:
     push ds
     push es
 
-    mov bl, [text_attr]
-
     mov ax, 0xB800
     mov ds, ax
     mov es, ax
 
     cld
-    mov si, SCREEN_WIDTH*2
+
+    ; copy rows 1..24 to rows 0..23
+    mov si, SCREEN_WIDTH * 2
     xor di, di
-    mov cx, SCREEN_WIDTH*(SCREEN_HEIGHT-1)
+    mov cx, SCREEN_WIDTH * (SCREEN_HEIGHT - 1)
     rep movsw
 
-    mov ah, bl
+    ; clear last row
+    mov di, SCREEN_WIDTH * (SCREEN_HEIGHT - 1) * 2
     mov al, ' '
-    mov di, SCREEN_WIDTH*(SCREEN_HEIGHT-1)*2
+    mov ah, VGA_SAFE_ATTR
     mov cx, SCREEN_WIDTH
     rep stosw
 
@@ -78,27 +82,24 @@ print_char:
 
     cmp al, 0
     je .done
-
     cmp al, 13
     je .newline
-
     cmp al, 10
     je .newline
-
     cmp al, 8
     je .backspace
-
     cmp al, 32
     jb .done
 
+    ; offset = ((cursor_y * SCREEN_WIDTH) + cursor_x) * 2
     xor ax, ax
     mov al, [cursor_y]
-    mov bl, SCREEN_WIDTH
-    mul bl
+    mov cx, SCREEN_WIDTH
+    mul cx
 
-    xor bx, bx
-    mov bl, [cursor_x]
-    add ax, bx
+    xor cx, cx
+    mov cl, [cursor_x]
+    add ax, cx
     shl ax, 1
 
     mov di, ax
@@ -106,8 +107,8 @@ print_char:
     mov es, ax
 
     mov al, [print_char_value]
-    mov ah, [text_attr]
-    stosw
+    mov ah, VGA_SAFE_ATTR
+    mov [es:di], ax
 
     inc byte [cursor_x]
     cmp byte [cursor_x], SCREEN_WIDTH
@@ -118,31 +119,35 @@ print_char:
     inc byte [cursor_y]
     cmp byte [cursor_y], SCREEN_HEIGHT
     jb .refresh
+
     call scroll_up
-    mov byte [cursor_y], SCREEN_HEIGHT-1
+    mov byte [cursor_y], SCREEN_HEIGHT - 1
+    mov byte [cursor_x], TEXT_LEFT_MARGIN
     jmp .refresh
 
 .backspace:
     cmp byte [cursor_x], TEXT_LEFT_MARGIN
     jbe .refresh
+
     dec byte [cursor_x]
 
     xor ax, ax
     mov al, [cursor_y]
-    mov bl, SCREEN_WIDTH
-    mul bl
+    mov cx, SCREEN_WIDTH
+    mul cx
 
-    xor bx, bx
-    mov bl, [cursor_x]
-    add ax, bx
+    xor cx, cx
+    mov cl, [cursor_x]
+    add ax, cx
     shl ax, 1
 
     mov di, ax
     mov ax, 0xB800
     mov es, ax
+
     mov al, ' '
-    mov ah, [text_attr]
-    stosw
+    mov ah, VGA_SAFE_ATTR
+    mov [es:di], ax
 
 .refresh:
     call update_cursor
@@ -154,12 +159,14 @@ print_char:
 
 print_string:
     pusha
+
 .next:
     lodsb
     cmp al, 0
     je .done
     call print_char
     jmp .next
+
 .done:
     popa
     ret
@@ -197,7 +204,7 @@ read_line:
     cmp al, 126
     ja .read_key
 
-    cmp cx, CMD_BUFFER_SIZE-1
+    cmp cx, CMD_BUFFER_SIZE - 1
     jae .read_key
 
     stosb
@@ -208,6 +215,7 @@ read_line:
 .backspace:
     cmp cx, 0
     je .read_key
+
     dec di
     dec cx
 
@@ -227,8 +235,8 @@ update_cursor:
 
     xor ax, ax
     mov al, [cursor_y]
-    mov bl, SCREEN_WIDTH
-    mul bl
+    mov cx, SCREEN_WIDTH
+    mul cx
 
     xor bx, bx
     mov bl, [cursor_x]

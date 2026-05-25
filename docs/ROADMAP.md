@@ -1,34 +1,56 @@
 # Ghost OS roadmap
 
-## v0.6 — FAT12 filesystem
+## Fase 0 - v0.5.2 stabile
 
-- Read FAT12 root directory
-- `ls` command
-- Load small external `.BIN` programs
-- Basic file error messages
+- Versione allineata a v0.5.2 in bootloader, kernel e messaggi.
+- Bootloader con `KERNEL_SECTORS = 32`.
+- Kernel fissato a `KERNEL_SIZE = 16384` byte.
+- Comandi base da verificare: `help`, `gui`, `browse`, `calc`, `color`, backspace.
 
-## v0.7 — Text tools
+## Fase 1 - modularizzazione minima
 
-- `type FILE.TXT`
-- Tiny text viewer
-- Simple line editor in memory
+- `kernel/config.inc`: costanti di build e layout.
+- `kernel/video_vga.inc`: modalita' testo, stampa, input riga, cursore.
+- `kernel/string.inc`: parsing stringhe per la shell.
+- `kernel/math.inc`: helper numerici.
+- `kernel/browser.inc`: browser testuale integrato.
+- `kernel/commands.inc`: implementazioni dei comandi.
+- `kernel/shell.inc`: loop e dispatch della shell.
+- `kernel/data.inc`: stato globale e stringhe.
 
-## v0.8 — Program model
+## v0.5.3 - multi-digit calculator
 
-- Internal syscall-like jump table
-- External program convention
-- Return-to-shell support
+- `parse_uint16`.
+- `calc` con numeri multi-cifra.
+- Operatori `+`, `-`, `*`, `/`.
+- Errori per input non valido, risultato negativo e divisione per zero.
 
-## v0.9 — Protected mode experiment
+## v0.5.4 - scrolling terminal
 
-- GDT setup
-- Switch to 32-bit protected mode
-- VGA text output without BIOS
+- Scrolling vero quando `cursor_y` supera l'ultima riga.
+- Prompt e output lunghi senza bloccare il cursore in fondo.
 
-## v1.0 — Usable hobby OS base
+## v0.5.5 - windows/panels TUI
 
-- Boot menu
-- CLI shell
-- FAT12 file loading
-- Internal and external commands
-- Minimal documentation for adding programs
+- `draw_box`.
+- `draw_title`.
+- Dashboard/pannelli testuali per comando `desktop` o `gui`.
+
+## v0.6 - FAT12 filesystem
+
+- Lettura root directory FAT12.
+- Ricerca file 8.3.
+- Caricamento file in buffer.
+- Preparazione immagine floppy con file reali, non solo settori raw.
+
+## v0.7 - load `.GHT` pages from disk
+
+- Comando `browse HOME.GHT`.
+- Parser minimale tag-like.
+- Rendering testuale di pagine locali.
+
+## v0.8 - protected mode
+
+- GDT minimale.
+- Salto 32-bit.
+- Demo VGA protected mode senza BIOS.

@@ -1,8 +1,9 @@
 ; Ghost OS kernel build-time configuration.
 
 CMD_BUFFER_SIZE equ 128
+STACK_SEG       equ 0x2000
 STACK_TOP       equ 0x9000
-KERNEL_SIZE     equ 32768
+KERNEL_SIZE     equ 65536
 PAGE_BUFFER_SIZE equ 2048
 E820_MAX_ENTRIES equ 16
 E820_ENTRY_SIZE equ 24

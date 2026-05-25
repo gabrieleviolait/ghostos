@@ -1,4 +1,4 @@
-; Ghost OS v1.3-alpha bootloader
+; Ghost OS v1.4-beta bootloader
 ; FAT12-compatible boot sector.
 ; Relocates itself above the kernel load area, then loads kernel sectors.
 
@@ -11,7 +11,7 @@
 OEMLabel            db 'GHOSTOS '
 BytesPerSector      dw 512
 SectorsPerCluster   db 1
-ReservedSectors     dw 65
+ReservedSectors     dw 129
 NumberOfFATs        db 2
 RootEntries         dw 224
 TotalSectors16      dw 2880
@@ -28,12 +28,14 @@ VolumeID            dd 0x20260525
 VolumeLabel         db 'GHOST OS   '
 FileSystemType      db 'FAT12   '
 
-RELOC_SEG              equ 0x0140      ; 0x0140:0x7C00 = physical 0x9000
+RELOC_SEG              equ 0x1000      ; 0x1000:0x7C00 = physical 0x17C00
+BOOT_STACK_SEG         equ 0x2000
+BOOT_STACK_TOP         equ 0xF000
 
 KERNEL_SEG             equ 0x0000
 KERNEL_OFFSET          equ 0x1000
 KERNEL_LBA             equ 1
-KERNEL_SECTORS         equ 64
+KERNEL_SECTORS         equ 128
 
 SECTORS_PER_TRACK      equ 18
 HEADS                  equ 2
@@ -44,10 +46,9 @@ relocate_bootloader:
     cli
     cld
 
-    mov [BOOT_DRIVE], dl
-
     xor ax, ax
     mov ds, ax
+    mov [BOOT_DRIVE], dl
     mov si, 0x7C00
 
     mov ax, RELOC_SEG
@@ -63,9 +64,9 @@ start_relocated:
     mov ax, cs
     mov ds, ax
 
-    xor ax, ax
+    mov ax, BOOT_STACK_SEG
     mov ss, ax
-    mov sp, 0xF000
+    mov sp, BOOT_STACK_TOP
 
     sti
 
@@ -75,6 +76,7 @@ start_relocated:
     mov ax, KERNEL_SEG
     mov es, ax
 
+    mov word [kernel_dest_segment], KERNEL_SEG
     mov word [kernel_dest], KERNEL_OFFSET
     mov word [current_lba], KERNEL_LBA
     mov word [sectors_left], KERNEL_SECTORS
@@ -101,6 +103,10 @@ disk_error:
 
 sector_loaded:
     add word [kernel_dest], 512
+    jnc .dest_ready
+    add word [kernel_dest_segment], 0x1000
+
+.dest_ready:
     inc word [current_lba]
     dec word [sectors_left]
     jmp load_kernel
@@ -113,7 +119,7 @@ kernel_loaded:
 read_kernel_sector:
     pusha
 
-    mov ax, KERNEL_SEG
+    mov ax, [kernel_dest_segment]
     mov es, ax
 
     mov ax, [current_lba]
@@ -181,9 +187,10 @@ BOOT_DRIVE   db 0
 retry_count  db 0
 sectors_left dw 0
 current_lba  dw 0
+kernel_dest_segment dw 0
 kernel_dest  dw 0
 
-boot_msg db 'Ghost OS bootloader v1.3-alpha',13,10
+boot_msg db 'Ghost OS bootloader v1.4-beta',13,10
          db 'Loading kernel...',13,10,0
 
 ok_msg db 'Kernel loaded.',13,10,0

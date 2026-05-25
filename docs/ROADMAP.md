@@ -1,6 +1,6 @@
 # Ghost OS roadmap
 
-Versione corrente: v1.3-alpha
+Versione corrente: v1.4-beta
 
 ## Fase 0 - v0.5.2 stabile
 
@@ -8,6 +8,7 @@ Versione corrente: v1.3-alpha
 - Legacy v0.5.x: bootloader con `KERNEL_SECTORS = 32`.
 - Legacy v0.5.x: kernel fissato a `KERNEL_SIZE = 16384` byte.
 - Da v1.2-alpha: kernel esteso a 64 settori / 32768 byte per paging, IDT e bitmap frame.
+- Da v1.4-beta: kernel esteso a 128 settori / 65536 byte con FAT12 reserved area aggiornata.
 - Comandi base da verificare: `help`, `gui`, `browse`, `calc`, `color`, backspace.
 
 ## Fase 1 - modularizzazione minima
@@ -125,3 +126,20 @@ Versione corrente: v1.3-alpha
 - Fatto: loader ring 0 minimale con load fisso a `0x00180000`.
 - Fatto: syscall table minimale `print`, `read`, `exit`.
 - Fatto: sample `HELLO.GEX` buildato da NASM e copiato nella FAT12 image.
+
+## v1.4-alpha - ghost32 line editor
+
+- Fatto: editing riga in `ghost32>` con frecce sinistra/destra, backspace, delete, home/end.
+- Fatto: history a ring buffer compatto con freccia su/giu.
+- Fatto: tab completion sui comandi built-in.
+- Fatto: input lungo, vuoto e tasti ai bordi gestiti in modo sicuro.
+- Nota: editor volutamente a singola riga per restare nel kernel da 64 settori.
+
+## v1.4-beta - kernel capacity layout
+
+- Fatto: bootloader aggiornato a `KERNEL_SECTORS = 128`.
+- Fatto: BPB FAT12 `ReservedSectors` aggiornato a 129.
+- Fatto: `tools/mkfat12.py` deriva FAT, root e data area dalla nuova reserved area.
+- Fatto: `KERNEL_SIZE = 65536` byte.
+- Fatto: bootloader relocation e stack real-mode spostati sopra il kernel espanso.
+- Nessuna nuova feature utente; resta una release di layout/stabilizzazione.

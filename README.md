@@ -1,6 +1,6 @@
 # GhostOS
 
-Versione corrente: v1.3-alpha
+Versione corrente: v1.4-beta
 
 Ghost OS e' un piccolo sistema operativo educativo in Assembly NASM
 16-bit real mode. Il kernel e' diviso in moduli `.inc`, la shell include
@@ -12,3 +12,7 @@ La fase corrente stabilizza FAT12 in protected mode e aggiunge diagnostica
 per heap, pagine fisiche e mappa E820.
 La shell `ghost32>` include il primo loader `.GEX` con `run HELLO.GEX`,
 syscall minime `print`, `read`, `exit` e ritorno sicuro alla CLI.
+La shell protected ora ha editing minimale della riga, history e tab
+completion dei comandi noti.
+La fase v1.4-beta aumenta in modo conservativo lo spazio kernel fisso a
+128 settori / 65536 byte, senza aggiungere nuove feature utente.

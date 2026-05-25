@@ -59,7 +59,55 @@ pm_irq1_keyboard:
 
     in al, 0x60
     cmp al, 0xE0
-    je .ack
+    jne .not_e0
+    mov byte [pm_kbd_e0], 1
+    jmp .ack
+
+.not_e0:
+    cmp byte [pm_kbd_e0], 0
+    je .normal
+    mov byte [pm_kbd_e0], 0
+    test al, 0x80
+    jnz .ack
+    cmp al, 0x4B
+    je .left
+    cmp al, 0x4D
+    je .right
+    cmp al, 0x48
+    je .up
+    cmp al, 0x50
+    je .down
+    cmp al, 0x53
+    je .delete
+    cmp al, 0x47
+    je .home
+    cmp al, 0x4F
+    je .end
+    jmp .ack
+
+.left:
+    mov al, KEY_LEFT
+    jmp .put
+.right:
+    mov al, KEY_RIGHT
+    jmp .put
+.up:
+    mov al, KEY_UP
+    jmp .put
+.down:
+    mov al, KEY_DOWN
+    jmp .put
+.delete:
+    mov al, KEY_DELETE
+    jmp .put
+.home:
+    mov al, KEY_HOME
+    jmp .put
+.end:
+    mov al, KEY_END
+    jmp .put
+
+.normal:
     test al, 0x80
     jnz .ack
 
@@ -69,6 +117,8 @@ pm_irq1_keyboard:
     mov al, [pm_scancode_ascii+ebx]
     cmp al, 0
     je .ack
+
+.put:
     call pm_kbd_buffer_put
 
 .ack:

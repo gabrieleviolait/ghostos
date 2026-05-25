@@ -1,4 +1,4 @@
-; Ghost OS v1.3-alpha kernel
+; Ghost OS v1.4-beta kernel
 ; Real-mode recovery shell plus protected-mode ghost32 runtime.
 
 [BITS 16]
@@ -13,6 +13,7 @@ kernel_start:
     xor ax, ax
     mov ds, ax
     mov es, ax
+    mov ax, STACK_SEG
     mov ss, ax
     mov sp, STACK_TOP
     mov [boot_drive], dl

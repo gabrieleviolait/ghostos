@@ -22,3 +22,39 @@ rtl8139_netup:
     ret
 
 rtl8139_netup_msg db 'RTL8139 netup skeleton OK',13,0
+
+
+rtl8139_netstat:
+    mov esi, rtl8139_status_msg
+    call pm_print_string
+
+    mov esi, rtl8139_init_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_initialized]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_tx_msg
+    call pm_print_string
+    mov eax, [rtl8139_tx_count]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_rx_msg
+    call pm_print_string
+    mov eax, [rtl8139_rx_count]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_err_msg
+    call pm_print_string
+    mov eax, [rtl8139_error_count]
+    call pm_print_uint32
+    call pm_newline
+    ret
+
+rtl8139_status_msg db 'RTL8139 status:',13,0
+rtl8139_init_msg   db 'initialized=',0
+rtl8139_tx_msg     db 'tx_count=',0
+rtl8139_rx_msg     db 'rx_count=',0
+rtl8139_err_msg    db 'errors=',0

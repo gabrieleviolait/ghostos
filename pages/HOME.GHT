@@ -1,0 +1,11 @@
+<title>Ghost OS Home</title>
+<h1>Welcome to Ghost OS</h1>
+<p>This page is loaded from a real FAT12 floppy image.</p>
+<hr>
+<p>Try these commands:</p>
+<pre>
+ls
+cat HELP.GHT
+browse ABOUT.GHT
+</pre>
+<a href="ABOUT.GHT">About Ghost OS</a>

@@ -1,4 +1,4 @@
-; Ghost OS v0.5.5 kernel
+; Ghost OS v0.8 kernel
 ; Pure NASM 16-bit x86 real mode CLI/TUI OS.
 
 [BITS 16]
@@ -15,6 +15,7 @@ kernel_start:
     mov es, ax
     mov ss, ax
     mov sp, STACK_TOP
+    mov [boot_drive], dl
 
     sti
 
@@ -37,7 +38,9 @@ halt_cpu:
 %include "kernel/tui.inc"
 %include "kernel/string.inc"
 %include "kernel/math.inc"
+%include "kernel/fat12.inc"
 %include "kernel/browser.inc"
+%include "kernel/protected_mode.inc"
 %include "kernel/commands.inc"
 %include "kernel/shell.inc"
 %include "kernel/data.inc"

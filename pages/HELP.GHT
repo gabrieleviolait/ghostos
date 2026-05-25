@@ -1,0 +1,11 @@
+<title>Ghost OS Help</title>
+<h1>Commands</h1>
+<pre>
+help              show command list
+gui / desktop     show panels TUI
+ls                list FAT12 root files
+cat HOME.GHT      print a FAT12 file
+browse HOME.GHT   render a .GHT page
+calc 12*34        calculator
+pmode             enter protected mode demo and halt
+</pre>

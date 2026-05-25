@@ -1,0 +1,6 @@
+<title>About Ghost OS</title>
+<h1>About</h1>
+<p>Ghost OS is a tiny educational operating system written in NASM.</p>
+<p>It currently runs a 16-bit real mode shell, reads FAT12 files, and can enter a protected mode demo.</p>
+<hr>
+<a href="HOME.GHT">Home</a>

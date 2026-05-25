@@ -49,6 +49,22 @@ shell_loop:
     call starts_with_word
     jc do_browse
 
+    mov di, cmd_ls
+    call starts_with_word
+    jc do_ls
+
+    mov di, cmd_cat
+    call starts_with_word
+    jc do_cat
+
+    mov di, cmd_pmode
+    call starts_with_word
+    jc do_pmode
+
+    mov di, cmd_protected
+    call starts_with_word
+    jc do_pmode
+
     mov di, cmd_reboot
     call starts_with_word
     jc do_reboot

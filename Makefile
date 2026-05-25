@@ -3,29 +3,32 @@ BUILD=build
 ISO_DIR=iso
 BOOT=boot/boot.asm
 KERNEL=kernel/kernel.asm
+PYTHON?=python3
+PAGES=$(wildcard pages/*.GHT)
 IMG=$(BUILD)/$(PROJECT).img
 ISO=$(BUILD)/$(PROJECT).iso
 
-.PHONY: all clean run run-iso iso img check
+.PHONY: all clean run run-iso iso img check-img check-iso
 
 all: iso
 
 $(BUILD):
 	mkdir -p $(BUILD)
 
-check:
+check-img:
 	@command -v nasm >/dev/null || (echo "Missing nasm. Install with: sudo apt install nasm" && exit 1)
+	@command -v $(PYTHON) >/dev/null || (echo "Missing $(PYTHON). Set PYTHON=python if needed." && exit 1)
+
+check-iso:
 	@command -v xorriso >/dev/null || (echo "Missing xorriso. Install with: sudo apt install xorriso" && exit 1)
 
-img: $(BUILD) check
+img: $(BUILD) check-img
 	nasm -f bin $(BOOT) -o $(BUILD)/boot.bin
 	nasm -f bin $(KERNEL) -o $(BUILD)/kernel.bin
-	dd if=/dev/zero of=$(IMG) bs=512 count=2880 status=none
-	dd if=$(BUILD)/boot.bin of=$(IMG) bs=512 count=1 conv=notrunc status=none
-	dd if=$(BUILD)/kernel.bin of=$(IMG) bs=512 seek=1 conv=notrunc status=none
+	$(PYTHON) tools/mkfat12.py $(IMG) $(BUILD)/boot.bin $(BUILD)/kernel.bin $(PAGES)
 	@echo "Created $(IMG)"
 
-iso: img
+iso: img check-iso
 	mkdir -p $(ISO_DIR)
 	cp $(IMG) $(ISO_DIR)/$(PROJECT).img
 	xorriso -as mkisofs -quiet -o $(ISO) -b $(PROJECT).img $(ISO_DIR)

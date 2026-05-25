@@ -1,9 +1,33 @@
-; Ghost OS v0.5.5 bootloader
+; Ghost OS v0.8 bootloader
 ; Pure NASM 16-bit x86 real mode
-; Loads kernel from disk sectors into 0000:1000 and jumps there.
+; FAT12-compatible boot sector. Loads the hidden fixed-sector kernel from
+; disk sectors into 0000:1000 and jumps there.
 
 [BITS 16]
 [ORG 0x7C00]
+
+    jmp short start
+    nop
+
+OEMLabel         db 'GHOSTOS '
+BytesPerSector   dw 512
+SectorsPerCluster db 1
+ReservedSectors  dw 33
+NumberOfFATs     db 2
+RootEntries      dw 224
+TotalSectors16   dw 2880
+MediaDescriptor  db 0xF0
+SectorsPerFAT    dw 9
+SectorsPerTrack  dw 18
+NumberOfHeads    dw 2
+HiddenSectors    dd 0
+TotalSectors32   dd 0
+DriveNumber      db 0
+ReservedBootByte db 0
+ExtendedBootSig  db 0x29
+VolumeID         dd 0x20260525
+VolumeLabel      db 'GHOST OS   '
+FileSystemType   db 'FAT12   '
 
 KERNEL_SEG     equ 0x0000
 KERNEL_OFFSET  equ 0x1000
@@ -95,7 +119,7 @@ halt:
 BOOT_DRIVE  db 0
 retry_count db 0
 
-boot_msg     db 'Ghost OS bootloader v0.5.5',13,10
+boot_msg     db 'Ghost OS bootloader v0.8',13,10
              db 'Loading kernel...',13,10,0
 
 ok_msg       db 'Kernel loaded.',13,10,0

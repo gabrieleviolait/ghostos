@@ -14,6 +14,43 @@ do_gui:
     call render_desktop
     jmp shell_loop
 
+do_ls:
+    call fat12_list_root
+    jmp shell_loop
+
+do_cat:
+    mov si, cmd_buffer
+    call skip_first_word
+    call skip_spaces
+    cmp byte [si], 0
+    je .usage
+
+    mov di, page_buffer
+    mov cx, PAGE_BUFFER_SIZE-1
+    call fat12_read_file
+    jc .error
+
+    mov si, page_buffer
+    call print_string
+    call newline
+    jmp shell_loop
+
+.usage:
+    mov si, cat_usage
+    call print_string
+    jmp shell_loop
+
+.error:
+    mov si, cat_error_msg
+    call print_string
+    jmp shell_loop
+
+do_pmode:
+    mov si, pmode_msg
+    call print_string
+    call enter_protected_mode_demo
+    jmp halt_cpu
+
 do_about:
     mov si, about_msg
     call print_string

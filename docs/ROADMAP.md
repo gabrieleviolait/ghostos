@@ -1,6 +1,6 @@
 # Ghost OS roadmap
 
-Versione corrente: v0.5.5
+Versione corrente: v0.8
 
 ## Fase 0 - v0.5.2 stabile
 
@@ -45,38 +45,31 @@ Versione corrente: v0.5.5
 
 ## v0.6 - FAT12 filesystem
 
-- Cambiare immagine floppy da raw settori a FAT12 formattata.
-- Aggiornare `Makefile`: creare `ghostos.img`, formattare FAT12, scrivere bootloader nel primo settore, copiare kernel e file `.GHT`.
-- Bootloader: per ora puo' ancora caricare kernel da settori fissi; poi possibile caricamento di `KERNEL.BIN` da FAT12.
-- Creare `kernel/fat12.inc`.
-- Kernel: leggere boot sector FAT12.
-- Kernel: leggere root directory.
-- Kernel: trovare file 8.3.
-- Kernel: leggere cluster chain.
-- Kernel: caricare file in buffer.
-- Aggiungere `pages/HOME.GHT`, `pages/ABOUT.GHT`, `pages/HELP.GHT`.
-- Comandi nuovi: `ls`, `cat HOME.GHT`.
+- Fatto: immagine floppy FAT12 con kernel in settori riservati.
+- Fatto: `Makefile` usa `tools/mkfat12.py` per creare image, boot sector, kernel e `.GHT`.
+- Fatto: bootloader ancora carica kernel da settori fissi.
+- Fatto: `kernel/fat12.inc`.
+- Fatto: lettura boot sector FAT12, root directory, ricerca 8.3, cluster chain, file buffer.
+- Fatto: `pages/HOME.GHT`, `pages/ABOUT.GHT`, `pages/HELP.GHT`.
+- Fatto: comandi `ls` e `cat HOME.GHT`.
 
 ## v0.7 - load `.GHT` pages from disk
 
-- `browser.inc` legge argomento dopo `browse`.
-- Se vuoto apre `HOME.GHT`.
-- Chiama `fat12_read_file`.
-- Carica file in `page_buffer`.
-- Renderizza testo.
-- Supporta pseudo-tag semplici: `<title>`, `<h1>`, `<p>`, `<hr>`, `<pre>`, `<a href="">`.
-- Link inizialmente solo visivi.
-- Poi supporto numeri link `[1]`, `[2]`.
-- Comandi: `browse`, `browse HOME.GHT`, `browse ABOUT.GHT`.
+- Fatto: `browser.inc` legge argomento dopo `browse`.
+- Fatto: se vuoto apre `HOME.GHT`.
+- Fatto: chiama `fat12_read_file`.
+- Fatto: carica file in `page_buffer`.
+- Fatto: renderer `.GHT` minimale.
+- Fatto: pseudo-tag semplici: `<title>`, `<h1>`, `<p>`, `<hr>`, `<pre>`, `<a href="">`.
+- Fatto: link per ora solo visivi.
+- Fatto: comandi `browse`, `browse HOME.GHT`, `browse ABOUT.GHT`.
 
 ## v0.8 - protected mode
 
-- Creare `kernel/protected_mode.inc`.
-- Definire GDT.
-- Disabilitare interrupt.
-- Caricare GDTR.
-- Impostare bit PE in CR0.
-- Far jump far in codice 32-bit.
-- Stampare messaggio in VGA memory direttamente.
-- Halt.
-- Nota: demo sicura solo con messaggio `Protected mode entered`; la shell resta 16-bit per ora.
+- Fatto: `kernel/protected_mode.inc`.
+- Fatto: GDT minimale.
+- Fatto: disabilita interrupt, carica GDTR, imposta PE in CR0.
+- Fatto: far jump in codice 32-bit.
+- Fatto: stampa `Protected mode entered` direttamente in VGA memory.
+- Fatto: halt.
+- Nota: demo sicura e one-way; la shell resta 16-bit per ora.

@@ -93,3 +93,15 @@ rtl8139_rxdump:
     ret
 
 rtl8139_rxdump_empty_msg db 'RTL8139 rxdump skeleton: no packet',13,0
+
+rtl8139_netreset:
+    mov byte [rtl8139_initialized], 0
+    mov dword [rtl8139_tx_count], 0
+    mov dword [rtl8139_rx_count], 0
+    mov dword [rtl8139_error_count], 0
+
+    mov esi, rtl8139_reset_msg
+    call pm_print_string
+    ret
+
+rtl8139_reset_msg db 'RTL8139 driver state reset',13,0

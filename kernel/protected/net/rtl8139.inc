@@ -14,6 +14,7 @@ rtl8139_initialized db 0
 rtl8139_tx_count dd 0
 rtl8139_rx_count dd 0
 rtl8139_error_count dd 0
+rtl8139_tx_len dd 0
 
 rtl8139_mac:
 db 52h,54h,00h,12h,34h,56h
@@ -162,7 +163,11 @@ rtl8139_txdump:
     call pm_print_string
 
     mov esi, rtl8139_tx_buffer
+    mov ecx, [rtl8139_tx_len]
+    cmp ecx, 0
+    jne .have_len
     mov ecx, 42
+    .have_len:
     xor ebx, ebx
 
 .dump_loop:
@@ -339,6 +344,7 @@ rtl8139_pingfake:
     ; Ethernet SRC rtl8139_mac
     mov esi, rtl8139_mac
     mov ecx, 6
+    
 .copy_mac:
     lodsb
     stosb
@@ -413,6 +419,8 @@ rtl8139_pingfake:
     stosb
     mov al, 01h
     stosb
+
+    mov dword [rtl8139_tx_len], 42
 
     inc dword [rtl8139_tx_count]
 
@@ -527,6 +535,8 @@ rtl8139_arpfake:
     stosb
     mov al, 02h
     stosb
+    
+    mov dword [rtl8139_tx_len], 42
 
     inc dword [rtl8139_tx_count]
 

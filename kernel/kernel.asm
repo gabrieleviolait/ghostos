@@ -51,6 +51,8 @@ halt_cpu:
 %include "kernel/protected/tasks.inc"
 %include "kernel/protected/keyboard.inc"
 %include "kernel/protected/vga32.inc"
+%include "kernel/protected/fat12.inc"
+%include "kernel/protected/browser32.inc"
 %include "kernel/protected/shell32.inc"
 [BITS 16]
 %include "kernel/commands.inc"

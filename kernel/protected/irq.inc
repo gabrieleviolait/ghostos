@@ -44,7 +44,7 @@ pm_pic_remap:
     out 0xA1, al
     call pm_io_wait
 
-    mov al, 11111101b
+    mov al, 10111101b
     out 0x21, al
     call pm_io_wait
     mov al, 11111111b
@@ -72,6 +72,16 @@ pm_irq1_keyboard:
     call pm_kbd_buffer_put
 
 .ack:
+    mov al, 0x20
+    out 0x20, al
+
+    popad
+    iretd
+
+pm_irq6_floppy:
+    pushad
+
+    mov byte [pm_floppy_irq_fired], 1
     mov al, 0x20
     out 0x20, al
 

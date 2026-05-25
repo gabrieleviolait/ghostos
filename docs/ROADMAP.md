@@ -107,3 +107,5 @@ Versione corrente: v1.0-beta
 - Fatto: Task 2 demo counter.
 - Fatto: runtime protected mode diviso in `kernel/protected/*.inc`.
 - Fatto: panic screen per eccezioni fatali in protected mode.
+- Fatto: `ghost32>` legge FAT12 read-only con `ls`, `cat` e `browse`.
+- Fatto: driver floppy protected-mode minimale via FDC/DMA, senza BIOS `int 13h`.

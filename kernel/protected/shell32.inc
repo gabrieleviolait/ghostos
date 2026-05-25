@@ -95,6 +95,18 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_echo
 
+    mov edi, pm_cmd_ls
+    call pm_starts_with_word
+    jc pm_do_ls
+
+    mov edi, pm_cmd_cat
+    call pm_starts_with_word
+    jc pm_do_cat
+
+    mov edi, pm_cmd_browse
+    call pm_starts_with_word
+    jc pm_do_browse
+
     mov edi, pm_cmd_version
     call pm_starts_with_word
     jc pm_do_version
@@ -136,6 +148,72 @@ pm_do_echo:
     call pm_newline
     jmp shell32_loop
 
+pm_do_ls:
+    call pm_fat12_list_root
+    jmp shell32_loop
+
+pm_do_cat:
+    mov esi, pm_cmd_buffer
+    call pm_skip_first_word
+    call pm_skip_spaces
+    cmp byte [esi], 0
+    je .usage
+
+    mov edi, page_buffer
+    mov ecx, PAGE_BUFFER_SIZE-1
+    call pm_fat12_read_file
+    jc .error
+
+    mov esi, page_buffer
+    call pm_print_string
+    call pm_newline
+    jmp shell32_loop
+
+.usage:
+    mov esi, cat_usage
+    call pm_print_string
+    jmp shell32_loop
+
+.error:
+    mov esi, cat_error_msg
+    call pm_print_string
+    jmp shell32_loop
+
+pm_do_browse:
+    call pm_clear_screen
+
+    mov esi, pm_cmd_buffer
+    call pm_skip_first_word
+    call pm_skip_spaces
+    cmp byte [esi], 0
+    jne .have_name
+    mov esi, default_page_name
+
+.have_name:
+    mov [pm_browser_filename_ptr], esi
+    mov edi, page_buffer
+    mov ecx, PAGE_BUFFER_SIZE-1
+    call pm_fat12_read_file
+    jc .load_error
+
+    mov esi, browser_disk_header
+    call pm_print_string
+    mov esi, [pm_browser_filename_ptr]
+    call pm_print_string
+    call pm_newline
+    mov esi, browser_separator
+    call pm_print_string
+
+    mov esi, page_buffer
+    call pm_render_ght_buffer
+    call pm_newline
+    jmp shell32_loop
+
+.load_error:
+    mov esi, browse_error_msg
+    call pm_print_string
+    jmp shell32_loop
+
 pm_do_version:
     mov esi, pm_version_msg
     call pm_print_string
@@ -168,12 +246,15 @@ pm_help_msg db 'Commands:',13
             db '  help       show this help',13
             db '  clear/cls  clear screen',13
             db '  echo TEXT  print text',13
+            db '  ls         list FAT12 root files',13
+            db '  cat FILE   print FAT12 text file',13
+            db '  browse FILE render .GHT page',13
             db '  version    show version',13
             db '  mem        show memory/task startup status',13
             db '  tasks      show task table summary',13
             db '  yield      run cooperative demo task once',13
             db '  halt       stop CPU',13,0
-pm_version_msg db 'Ghost OS v1.0-beta / protected runtime stabilization',13,0
+pm_version_msg db 'Ghost OS v1.0-beta / protected runtime + FAT12',13,0
 pm_unknown_msg db 'Unknown command. Type help.',13,0
 pm_halt_msg db 'System halted.',13,0
 
@@ -181,6 +262,9 @@ pm_cmd_help db 'help',0
 pm_cmd_clear db 'clear',0
 pm_cmd_cls db 'cls',0
 pm_cmd_echo db 'echo',0
+pm_cmd_ls db 'ls',0
+pm_cmd_cat db 'cat',0
+pm_cmd_browse db 'browse',0
 pm_cmd_version db 'version',0
 pm_cmd_mem db 'mem',0
 pm_cmd_tasks db 'tasks',0

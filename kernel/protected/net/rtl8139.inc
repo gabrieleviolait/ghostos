@@ -65,6 +65,45 @@ rtl8139_txdemo:
 
     inc dword [rtl8139_tx_count]
 
+    mov edi, rtl8139_tx_buffer
+
+    ; DEST MAC FF:FF:FF:FF:FF:FF
+    mov ecx, 6
+    mov al, 0FFh
+    rep stosb
+
+    ; SRC MAC 52:54:00:12:34:56
+    mov al, 52h
+    stosb
+    mov al, 54h
+    stosb
+    mov al, 00h
+    stosb
+    mov al, 12h
+    stosb
+    mov al, 34h
+    stosb
+    mov al, 56h
+    stosb
+
+    ; EtherType 0x88B5
+    mov al, 88h
+    stosb
+    mov al, 0B5h
+    stosb
+
+    ; Payload "GHOST"
+    mov al, 'G'
+    stosb
+    mov al, 'H'
+    stosb
+    mov al, 'O'
+    stosb
+    mov al, 'S'
+    stosb
+    mov al, 'T'
+    stosb
+
     mov esi, rtl8139_txdemo_msg
     call pm_print_string
     ret
@@ -75,7 +114,7 @@ rtl8139_txdemo:
     call pm_print_string
     ret
 
-rtl8139_txdemo_msg db 'RTL8139 txdemo skeleton: TX counter increased',13,0
+rtl8139_txdemo_msg db 'RTL8139 fake ethernet frame built',13,0
 rtl8139_not_ready_msg db 'RTL8139 not initialized. Run netup first.',13,0
 
 rtl8139_rxdump:
@@ -117,3 +156,25 @@ rtl8139_netclear:
     ret
 
 rtl8139_clear_msg db 'RTL8139 counters cleared',13,0
+
+rtl8139_txdump:
+    mov esi, rtl8139_dump_msg
+    call pm_print_string
+
+    mov esi, rtl8139_tx_buffer
+    mov ecx, 19
+
+.dump_loop:
+    lodsb
+    call pm_print_hex32
+    mov al, ' '
+    call pm_print_char
+    loop .dump_loop
+
+    call pm_newline
+    ret
+
+rtl8139_dump_msg db 'TX frame dump:',13,0
+
+rtl8139_tx_buffer:
+times 64 db 0

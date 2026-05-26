@@ -115,7 +115,7 @@ curve25519_public_key  times 32 db 0
 curve25519_fe_a times 32 db 0
 curve25519_fe_b times 32 db 0
 curve25519_fe_out times 32 db 0
-curve25519_mul_temp times 64 db 0
+curve25519_mul_temp times 64 dw 0
 curve25519_mul_out_ptr dd 0
 
 curve25519_basepoint:
@@ -228,19 +228,19 @@ curve25519_fe_mul:
     ; ESI = a
     ; EDI = b
     ; EDX = out
-    ; VERY EARLY schoolbook skeleton
-    ; currently computes only low-byte products
+    ; early schoolbook multiplication with 16-bit temp slots
+    ; NOT final Curve25519 reduction yet
 
     pushad
     mov [curve25519_mul_out_ptr], edx
 
-    ; zero temp
+    ; zero 64 words = 128 bytes
     mov ecx, 64
-    mov ebx, curve25519_mul_temp
+    mov ebp, curve25519_mul_temp
 
 .zero:
-    mov byte [ebx], 0
-    inc ebx
+    mov word [ebp], 0
+    add ebp, 2
     dec ecx
     jnz .zero
 
@@ -258,14 +258,18 @@ curve25519_fe_mul:
 
     mov al, [esi + ebx]
     mov dl, [edi + ecx]
-
-    mul dl
+    mul dl                 ; AX = AL * DL
+    mov si, ax             ; save product
 
     mov ebp, curve25519_mul_temp
-    add ebp, ebx
-    add ebp, ecx
+    mov eax, ebx
+    add eax, ecx
+    shl eax, 1             ; word index
+    add ebp, eax
 
-    add [ebp], al
+    mov ax, [ebp]
+    add ax, si
+    mov [ebp], ax
 
     inc ecx
     jmp .inner
@@ -275,16 +279,35 @@ curve25519_fe_mul:
     jmp .outer
 
 .done:
-    ; copy first 32 bytes to out
+    ; fold carries across 64 word slots
+    mov ecx, 63
+    mov ebp, curve25519_mul_temp
+
+.fold:
+    mov ax, [ebp]
+    mov dx, ax
+    and ax, 00FFh
+    mov [ebp], ax
+
+    shr dx, 8
+    add [ebp + 2], dx
+
+    add ebp, 2
+    dec ecx
+    jnz .fold
+
+    call curve25519_fe_reduce
+
+    ; copy low byte of first 32 word slots to out
     mov esi, curve25519_mul_temp
     mov edi, [curve25519_mul_out_ptr]
     mov ecx, 32
 
 .copy:
-    mov al, [esi]
+    mov ax, [esi]
     mov [edi], al
 
-    inc esi
+    add esi, 2
     inc edi
 
     dec ecx
@@ -303,6 +326,35 @@ curve25519_fe_square:
     call curve25519_fe_mul
 
     pop edi
+    ret
+
+curve25519_fe_reduce:
+    ; very early pseudo reduction
+    ; folds upper half back into lower half * 19
+
+    pushad
+
+    mov ecx, 32
+    mov esi, curve25519_mul_temp
+    add esi, 64          ; upper half
+
+    mov edi, curve25519_mul_temp
+
+.loop:
+    mov al, [esi]
+
+    mov ah, 19
+    mul ah               ; AX = upper * 19
+
+    add [edi], al
+
+    inc esi
+    add edi, 2
+
+    dec ecx
+    jnz .loop
+
+    popad
     ret
 
 curve25519_fe_zero:

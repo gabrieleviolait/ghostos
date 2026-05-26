@@ -29,10 +29,11 @@ RTL8139_RCR_WRAP  equ 00000080h
 RTL8139_RCR_MXDMA_1024 equ 00000600h
 RTL8139_RCR_MXDMA_UNLIMITED equ 00000700h
 RTL8139_RCR_RBLEN_8K equ 00000000h
+RTL8139_RCR_RXFTH_16 equ 00000000h
 RTL8139_RCR_RXFTH_NONE equ 0000E000h
-RTL8139_RCR_QEMU equ RTL8139_RCR_AAP | RTL8139_RCR_APM | RTL8139_RCR_AM | RTL8139_RCR_AB | RTL8139_RCR_RBLEN_8K | RTL8139_RCR_MXDMA_1024 | RTL8139_RCR_RXFTH_NONE
+RTL8139_RCR_QEMU equ RTL8139_RCR_AAP | RTL8139_RCR_APM | RTL8139_RCR_AM | RTL8139_RCR_AB | RTL8139_RCR_RBLEN_8K | RTL8139_RCR_MXDMA_1024 | RTL8139_RCR_RXFTH_16
 RTL8139_RCR_PERMISSIVE equ RTL8139_RCR_QEMU | RTL8139_RCR_WRAP | RTL8139_RCR_MXDMA_UNLIMITED
-RTL8139_RCR_MINIMAL equ RTL8139_RCR_APM | RTL8139_RCR_AB | RTL8139_RCR_RBLEN_8K | RTL8139_RCR_MXDMA_1024 | RTL8139_RCR_RXFTH_NONE
+RTL8139_RCR_MINIMAL equ RTL8139_RCR_APM | RTL8139_RCR_AB | RTL8139_RCR_RBLEN_8K | RTL8139_RCR_MXDMA_1024 | RTL8139_RCR_RXFTH_16
 RTL8139_TCR_IFG96 equ 00000000h
 RTL8139_TCR_MXDMA_1024 equ 00000600h
 RTL8139_TCR_MXDMA_UNLIMITED equ 00000700h
@@ -57,6 +58,13 @@ rtl8139_tx_count dd 0
 rtl8139_rx_count dd 0
 rtl8139_error_count dd 0
 rtl8139_tx_len dd 0
+rtl8139_rxtest_first_before dd 0
+rtl8139_rxtest_first_after dd 0
+rtl8139_rxtest_cbr_before dw 0
+rtl8139_rxtest_cbr_after dw 0
+rtl8139_rxtest_isr_before dw 0
+rtl8139_rxtest_isr_after dw 0
+rtl8139_rxtest_tsd0 dd 0
 rtl8139_io_base dw 0C000h
 rtl8139_bar_raw dd 0
 rtl8139_bar_index db 0
@@ -1236,12 +1244,6 @@ rtl8139_write_initial_capr:
 rtl8139_configure_rx_path:
     call rtl8139_wake
 
-    ; Clear all pending status.
-    mov dx, [rtl8139_io_base]
-    add dx, RTL8139_ISR
-    mov ax, 0FFFFh
-    out dx, ax
-
     ; RX ring base.
     mov dx, [rtl8139_io_base]
     add dx, RTL8139_RBSTART
@@ -1275,7 +1277,7 @@ rtl8139_configure_rx_path:
     mov ax, RTL8139_ISR_NETMASK
     out dx, ax
 
-    ; Clear pending interrupt status before enabling RX/TX.
+    ; Clear pending interrupt status after RX registers are programmed.
     mov dx, [rtl8139_io_base]
     add dx, RTL8139_ISR
     mov ax, 0FFFFh
@@ -1397,7 +1399,7 @@ rtl8139_rxbuf_phys_msg db 'RX buffer phys: ',0
 rtl8139_rbstart_msg db 'RBSTART: ',0
 rtl8139_cr_after_enable_msg db 'CR after enable: ',0
 rtl8139_rcr_final_msg db 'RCR final: ',0
-rtl8139_rxbuf_config_msg db 'RXBUF config: 8K WRAP RBLEN=00',13,0
+rtl8139_rxbuf_config_msg db 'RXBUF config: 8K + 16 + slack, RBLEN=00',13,0
 rtl8139_imr_final_msg db 'IMR final: ',0
 rtl8139_rxmode_msg db 'RX mode: ',0
 rtl8139_rxmode_rcr_msg db 'RCR preset: ',0
@@ -1915,6 +1917,461 @@ rtl8139_rxmode:
     ret
 
 rtl8139_rxmode_usage_msg db 'Usage: rxmode [qemu|permissive|minimal]',13,0
+
+rtl8139_rxtest:
+    mov esi, pm_cmd_buffer
+    call pm_skip_first_word
+    call pm_skip_spaces
+
+    mov edi, rtl8139_arg_verbose
+    call pm_starts_with_word
+    jc rtl8139_rxtest_verbose
+
+    mov dword [rtl8139_rcr_value], RTL8139_RCR_QEMU
+    mov dword [rtl8139_tcr_value], RTL8139_TCR_QEMU
+    mov dword [rtl8139_rxmode_name], rtl8139_rxmode_qemu_name
+    mov dword [rtl8139_rx_rbstart_override], 0
+    mov byte [rtl8139_rx_capr_mode], 1
+    mov byte [rtl8139_gateway_mac_known], 0
+    mov dword [rtl8139_rxtest_first_before], 0
+    mov dword [rtl8139_rxtest_first_after], 0
+    mov word [rtl8139_rxtest_cbr_before], 0
+    mov word [rtl8139_rxtest_cbr_after], 0
+    mov word [rtl8139_rxtest_isr_before], 0
+    mov word [rtl8139_rxtest_isr_after], 0
+    mov dword [rtl8139_rxtest_tsd0], 0
+
+    call rtl8139_rxtest_quiet_netup
+    cmp byte [rtl8139_initialized], 1
+    jne .done
+
+    mov eax, [rtl8139_rx_buffer]
+    mov [rtl8139_rxtest_first_before], eax
+
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CBR
+    in ax, dx
+    mov [rtl8139_rxtest_cbr_before], ax
+
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_ISR
+    in ax, dx
+    mov [rtl8139_rxtest_isr_before], ax
+
+    call rtl8139_build_arp_request
+    call rtl8139_rxtest_tx_submit_silent
+
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_TSD0
+    in eax, dx
+    mov [rtl8139_rxtest_tsd0], eax
+
+    mov ecx, 30000
+.poll_loop:
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_ISR
+    in ax, dx
+    mov [rtl8139_rxtest_isr_after], ax
+    test ax, RTL8139_ISR_ROK
+    jnz .poll_done
+
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CBR
+    in ax, dx
+    cmp ax, [rtl8139_last_cbr]
+    jne .poll_done
+
+    mov eax, [rtl8139_rx_buffer]
+    cmp eax, [rtl8139_rxtest_first_before]
+    jne .poll_done
+    loop .poll_loop
+
+.poll_done:
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CBR
+    in ax, dx
+    mov [rtl8139_rxtest_cbr_after], ax
+
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_ISR
+    in ax, dx
+    mov [rtl8139_rxtest_isr_after], ax
+
+    mov eax, [rtl8139_rx_buffer]
+    mov [rtl8139_rxtest_first_after], eax
+
+    call rtl8139_rxtest_parse_silent
+    call rtl8139_rxtest_summary
+
+.done:
+    ret
+
+rtl8139_rxtest_verbose:
+    mov esi, rtl8139_rxtest_verbose_msg
+    call pm_print_string
+    call rtl8139_netup
+    cmp byte [rtl8139_initialized], 1
+    jne .done
+    mov eax, [rtl8139_rx_buffer]
+    mov [rtl8139_rxtest_first_before], eax
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CBR
+    in ax, dx
+    mov [rtl8139_rxtest_cbr_before], ax
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_ISR
+    in ax, dx
+    mov [rtl8139_rxtest_isr_before], ax
+    call rtl8139_build_arp_request
+    call rtl8139_tx_submit_current
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_TSD0
+    in eax, dx
+    mov [rtl8139_rxtest_tsd0], eax
+    call rtl8139_rxdebug
+    call rtl8139_rxpacket
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CBR
+    in ax, dx
+    mov [rtl8139_rxtest_cbr_after], ax
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_ISR
+    in ax, dx
+    mov [rtl8139_rxtest_isr_after], ax
+    mov eax, [rtl8139_rx_buffer]
+    mov [rtl8139_rxtest_first_after], eax
+    call rtl8139_rxtest_summary
+.done:
+    ret
+
+rtl8139_rxtest_quiet_netup:
+    call rtl8139_bind_pci_io_quiet
+    mov byte [rtl8139_initialized], 0
+    mov byte [rtl8139_rx_ready], 0
+    mov dword [rtl8139_rx_offset], 0
+    mov dword [rtl8139_rx_first_dword], 0
+
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CR
+    mov al, RTL8139_CR_RST
+    out dx, al
+
+    mov ecx, 100000
+.reset_wait:
+    in al, dx
+    test al, RTL8139_CR_RST
+    jz .reset_done
+    loop .reset_wait
+    stc
+    ret
+
+.reset_done:
+    call rtl8139_configure_rx_path
+    mov byte [rtl8139_rx_ready], 1
+    mov byte [rtl8139_initialized], 1
+    clc
+    ret
+
+rtl8139_bind_pci_io_quiet:
+    call pci_scan_bus
+    xor ebx, ebx
+
+.loop:
+    cmp ebx, [pm_pci_count]
+    jae .fallback
+
+    imul edi, ebx, PCI_RECORD_SIZE
+    add edi, pm_pci_records
+    call pm_pci_get_nic_type
+    jc .next
+    cmp al, PCI_NIC_RTL8139
+    jne .next
+
+    mov eax, [edi+PCI_REC_BAR0]
+    mov dword [rtl8139_bar_raw], eax
+    mov byte [rtl8139_bar_index], 0
+    call rtl8139_try_bind_io_bar
+    jnc .bound
+
+    mov eax, [edi+PCI_REC_BAR1]
+    mov dword [rtl8139_bar_raw], eax
+    mov byte [rtl8139_bar_index], 1
+    call rtl8139_try_bind_io_bar
+    jnc .bound
+
+    jmp .fallback
+
+.next:
+    inc ebx
+    jmp .loop
+
+.bound:
+    mov byte [pm_pci_nic_type], PCI_NIC_RTL8139
+    ret
+
+.fallback:
+    mov word [rtl8139_io_base], 0C000h
+    mov dword [rtl8139_bar_raw], 0
+    mov byte [rtl8139_bar_index], 0
+    ret
+
+rtl8139_rxtest_tx_submit_silent:
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_TSAD0
+    mov eax, rtl8139_tx_buffer
+    out dx, eax
+
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_TSD0
+    mov eax, [rtl8139_tx_len]
+    out dx, eax
+
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_TSD0
+    mov ecx, 100000
+.wait_tx:
+    in eax, dx
+    test eax, RTL8139_TSD_TOK | RTL8139_TSD_TABT | RTL8139_TSD_TUN
+    jnz .done
+    loop .wait_tx
+.done:
+    mov [rtl8139_rxtest_tsd0], eax
+    ret
+
+rtl8139_rxtest_parse_silent:
+    pushad
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CR
+    in al, dx
+    test al, RTL8139_CR_BUFE
+    jnz .done
+
+    mov ebx, [rtl8139_rx_offset]
+    and ebx, RTL8139_RX_RING_MASK
+    movzx eax, word [rtl8139_rx_buffer + ebx + 2]
+    cmp eax, 42
+    jb .done
+    cmp eax, 1600
+    ja .done
+
+    mov esi, rtl8139_rx_buffer
+    add esi, ebx
+    add esi, 4
+    cmp byte [esi + 12], 08h
+    jne .advance
+    cmp byte [esi + 13], 06h
+    jne .advance
+    cmp byte [esi + 20], 00h
+    jne .advance
+    cmp byte [esi + 21], 02h
+    jne .advance
+    cmp byte [esi + 28], 10
+    jne .advance
+    cmp byte [esi + 29], 0
+    jne .advance
+    cmp byte [esi + 30], 2
+    jne .advance
+    cmp byte [esi + 31], 2
+    jne .advance
+
+    push esi
+    add esi, 22
+    mov edi, rtl8139_gateway_mac
+    mov ecx, 6
+.copy_gateway_mac:
+    lodsb
+    stosb
+    loop .copy_gateway_mac
+    pop esi
+    mov byte [rtl8139_gateway_mac_known], 1
+    inc dword [rtl8139_arp_reply_count]
+
+.advance:
+    movzx eax, word [rtl8139_rx_buffer + ebx + 2]
+    add eax, ebx
+    add eax, 4
+    add eax, 3
+    and eax, 0FFFFFFFCh
+    and eax, RTL8139_RX_RING_MASK
+    mov [rtl8139_rx_offset], eax
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CAPR
+    mov ax, [rtl8139_rx_offset]
+    sub ax, 16
+    out dx, ax
+.done:
+    popad
+    ret
+
+rtl8139_rxtest_summary:
+    mov esi, rtl8139_rxtest_summary_msg
+    call pm_print_string
+
+    mov esi, rtl8139_rxtest_mode_msg
+    call pm_print_string
+    mov esi, [rtl8139_rxmode_name]
+    call pm_print_string
+    call pm_newline
+
+    mov esi, rtl8139_rbstart_msg
+    call pm_print_string
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_RBSTART
+    in eax, dx
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_rxstatus_capr_msg
+    call pm_print_string
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CAPR
+    in ax, dx
+    movzx eax, ax
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_rxtest_cbr_before_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_rxtest_cbr_before]
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_rxtest_cbr_after_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_rxtest_cbr_after]
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_rxtest_isr_before_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_rxtest_isr_before]
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_rxtest_isr_after_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_rxtest_isr_after]
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_rxstatus_rcr_msg
+    call pm_print_string
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_RCR
+    in eax, dx
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_tcr_msg
+    call pm_print_string
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_TCR
+    in eax, dx
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_rxstatus_cr_msg
+    call pm_print_string
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CR
+    in al, dx
+    movzx eax, al
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_rxtest_tok_msg
+    call pm_print_string
+    mov ebx, [rtl8139_rxtest_tsd0]
+    test ebx, RTL8139_TSD_TOK
+    jz .tok_no
+    call rtl8139_print_yes
+    jmp .rok
+.tok_no:
+    call rtl8139_print_no
+
+.rok:
+    mov esi, rtl8139_rxtest_rok_msg
+    call pm_print_string
+    mov bx, [rtl8139_rxtest_isr_after]
+    test bx, RTL8139_ISR_ROK
+    jz .rok_no
+    call rtl8139_print_yes
+    jmp .ring
+.rok_no:
+    call rtl8139_print_no
+
+.ring:
+    mov esi, rtl8139_rxtest_mem_changed_msg
+    call pm_print_string
+    mov eax, [rtl8139_rxtest_first_after]
+    cmp eax, [rtl8139_rxtest_first_before]
+    jne .mem_yes
+    call rtl8139_print_no
+    jmp .first
+.mem_yes:
+    call rtl8139_print_yes
+
+.first:
+    mov esi, rtl8139_rxdebug_first_msg
+    call pm_print_string
+    mov eax, [rtl8139_rxtest_first_after]
+    call pm_print_hex32
+    call pm_newline
+
+.arp:
+    mov esi, rtl8139_rxtest_arp_state_msg
+    call pm_print_string
+    cmp byte [rtl8139_gateway_mac_known], 1
+    jne .arp_unknown
+    mov esi, rtl8139_known_msg
+    call pm_print_string
+    jmp .gateway
+.arp_unknown:
+    mov esi, rtl8139_unknown_word_msg
+    call pm_print_string
+
+.gateway:
+    mov esi, rtl8139_rxtest_gateway_mac_msg
+    call pm_print_string
+    cmp byte [rtl8139_gateway_mac_known], 1
+    jne .gateway_unknown
+    mov esi, rtl8139_gateway_mac
+    call rtl8139_dump_mac
+    call pm_newline
+    ret
+.gateway_unknown:
+    mov esi, rtl8139_unknown_line_msg
+    call pm_print_string
+    ret
+
+rtl8139_print_yes:
+    mov esi, rtl8139_yes_msg
+    call pm_print_string
+    ret
+
+rtl8139_print_no:
+    mov esi, rtl8139_no_msg
+    call pm_print_string
+    ret
+
+rtl8139_arg_verbose db 'verbose',0
+rtl8139_rxtest_verbose_msg db 'RTL8139 RX test verbose',13,0
+rtl8139_rxtest_summary_msg db 'RXTEST SUMMARY',13,0
+rtl8139_rxtest_mode_msg db 'mode: ',0
+rtl8139_rxtest_cbr_before_msg db 'CBR before: ',0
+rtl8139_rxtest_cbr_after_msg db 'CBR after: ',0
+rtl8139_rxtest_isr_before_msg db 'ISR before: ',0
+rtl8139_rxtest_isr_after_msg db 'ISR after: ',0
+rtl8139_rxtest_mem_changed_msg db 'RX ring changed: ',0
+rtl8139_rxtest_tok_msg db 'TOK: ',0
+rtl8139_rxtest_rok_msg db 'ROK: ',0
+rtl8139_rxtest_arp_state_msg db 'ARP state: ',0
+rtl8139_rxtest_gateway_mac_msg db 'gateway_mac: ',0
+rtl8139_known_msg db 'known',13,0
+rtl8139_unknown_word_msg db 'unknown',13,0
+rtl8139_unknown_line_msg db 'unknown',13,0
+rtl8139_yes_msg db 'yes',13,0
+rtl8139_no_msg db 'no',13,0
 
 rtl8139_rxdebug:
     cmp byte [rtl8139_rx_ready], 1

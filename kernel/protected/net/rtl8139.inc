@@ -52,6 +52,9 @@ RTL8139_TSD_OWN   equ 00002000h
 RTL8139_TSD_TUN   equ 00004000h
 RTL8139_TSD_TOK   equ 00008000h
 RTL8139_TSD_TABT  equ 40000000h
+TCP_STATE_CLOSED equ 0
+TCP_STATE_SYN_SENT equ 1
+TCP_STATE_ESTABLISHED equ 2
 
 rtl8139_initialized db 0
 rtl8139_tx_count dd 0
@@ -107,6 +110,20 @@ rtl8139_last_udp_src_ip db 0,0,0,0
 rtl8139_last_udp_src_port dw 0
 rtl8139_last_udp_dst_port dw 0
 rtl8139_last_udp_len dw 0
+rtl8139_tcp_state db TCP_STATE_CLOSED
+rtl8139_tcp_tx_count dd 0
+rtl8139_tcp_rx_count dd 0
+rtl8139_tcp_synack_count dd 0
+rtl8139_tcp_ack_tx_count dd 0
+rtl8139_tcp_src_port dw 49153
+rtl8139_tcp_dst_port dw 80
+rtl8139_tcp_seq dd 01020304h
+rtl8139_tcp_last_src_ip db 0,0,0,0
+rtl8139_tcp_last_src_port dw 0
+rtl8139_tcp_last_dst_port dw 0
+rtl8139_tcp_last_flags db 0
+rtl8139_tcp_last_seq dd 0
+rtl8139_tcp_last_ack dd 0
 rtl8139_pingtest_tsd dd 0
 rtl8139_pingtest_isr dw 0
 rtl8139_arp_wait_first dd 0
@@ -299,6 +316,17 @@ rtl8139_netreset:
     mov word [rtl8139_last_udp_src_port], 0
     mov word [rtl8139_last_udp_dst_port], 0
     mov word [rtl8139_last_udp_len], 0
+    mov byte [rtl8139_tcp_state], TCP_STATE_CLOSED
+    mov dword [rtl8139_tcp_tx_count], 0
+    mov dword [rtl8139_tcp_rx_count], 0
+    mov dword [rtl8139_tcp_synack_count], 0
+    mov dword [rtl8139_tcp_ack_tx_count], 0
+    mov dword [rtl8139_tcp_last_src_ip], 0
+    mov word [rtl8139_tcp_last_src_port], 0
+    mov word [rtl8139_tcp_last_dst_port], 0
+    mov byte [rtl8139_tcp_last_flags], 0
+    mov dword [rtl8139_tcp_last_seq], 0
+    mov dword [rtl8139_tcp_last_ack], 0
 
     mov esi, rtl8139_reset_msg
     call pm_print_string
@@ -319,6 +347,17 @@ rtl8139_netclear:
     mov word [rtl8139_last_udp_src_port], 0
     mov word [rtl8139_last_udp_dst_port], 0
     mov word [rtl8139_last_udp_len], 0
+    mov byte [rtl8139_tcp_state], TCP_STATE_CLOSED
+    mov dword [rtl8139_tcp_tx_count], 0
+    mov dword [rtl8139_tcp_rx_count], 0
+    mov dword [rtl8139_tcp_synack_count], 0
+    mov dword [rtl8139_tcp_ack_tx_count], 0
+    mov dword [rtl8139_tcp_last_src_ip], 0
+    mov word [rtl8139_tcp_last_src_port], 0
+    mov word [rtl8139_tcp_last_dst_port], 0
+    mov byte [rtl8139_tcp_last_flags], 0
+    mov dword [rtl8139_tcp_last_seq], 0
+    mov dword [rtl8139_tcp_last_ack], 0
 
     mov esi, rtl8139_clear_msg
     call pm_print_string
@@ -363,6 +402,9 @@ rtl8139_dump_msg db 'TX frame dump:',13,0
 align 16, db 0
 rtl8139_tx_buffer:
 times 2048 db 0
+
+rtl8139_tcp_checksum_buffer:
+times 64 db 0
 
 align 256, db 0
 rtl8139_rx_buffer:
@@ -662,6 +704,153 @@ rtl8139_udpstat:
     call pm_newline
     ret
 
+rtl8139_tcpconnect_cmd:
+    mov esi, pm_cmd_buffer
+    call pm_skip_first_word
+    call pm_skip_spaces
+
+    mov edi, rtl8139_gateway_ip_text
+    call pm_starts_with_word
+    jnc .usage
+
+    call pm_skip_first_word
+    call pm_skip_spaces
+    mov edi, rtl8139_tcp_dst_port_text
+    call pm_starts_with_word
+    jnc .usage
+
+    mov word [rtl8139_tcp_dst_port], 80
+
+    cmp byte [rtl8139_initialized], 1
+    je .ready
+
+    call rtl8139_rxtest_quiet_netup
+    cmp byte [rtl8139_initialized], 1
+    jne .not_ready
+
+.ready:
+    call rtl8139_enable_pci_bus_master
+    call rtl8139_ensure_gateway_mac
+    cmp byte [rtl8139_gateway_mac_known], 1
+    jne .no_arp
+
+    mov byte [rtl8139_tcp_state], TCP_STATE_SYN_SENT
+    mov dword [rtl8139_tcp_synack_count], 0
+    call rtl8139_build_tcp_syn
+    call rtl8139_tx_submit_current_quiet
+    inc dword [rtl8139_tcp_tx_count]
+
+    mov esi, rtl8139_tcp_syn_sent_msg
+    call pm_print_string
+
+    mov ecx, 20
+.poll:
+    push ecx
+    call rtl8139_wait_for_rx_activity
+    call rtl8139_rx_process_packet_quiet
+    pop ecx
+    cmp dword [rtl8139_tcp_synack_count], 0
+    jne .synack
+    loop .poll
+
+    mov esi, rtl8139_tcp_syn_wait_msg
+    call pm_print_string
+    ret
+
+.synack:
+    call rtl8139_build_tcp_ack
+    call rtl8139_tx_submit_current_quiet
+    inc dword [rtl8139_tcp_ack_tx_count]
+    mov byte [rtl8139_tcp_state], TCP_STATE_ESTABLISHED
+    mov esi, rtl8139_tcp_established_msg
+    call pm_print_string
+    ret
+
+.usage:
+    mov esi, rtl8139_tcpconnect_usage_msg
+    call pm_print_string
+    ret
+
+.no_arp:
+    inc dword [rtl8139_error_count]
+    mov esi, rtl8139_tcp_no_arp_msg
+    call pm_print_string
+    ret
+
+.not_ready:
+    inc dword [rtl8139_error_count]
+    mov esi, rtl8139_not_ready_msg
+    call pm_print_string
+    ret
+
+rtl8139_tcpstat:
+    mov esi, rtl8139_tcpstat_msg
+    call pm_print_string
+
+    mov esi, rtl8139_tcp_state_msg
+    call pm_print_string
+    call rtl8139_print_tcp_state
+
+    mov esi, rtl8139_tcp_tx_msg
+    call pm_print_string
+    mov eax, [rtl8139_tcp_tx_count]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_tcp_rx_msg
+    call pm_print_string
+    mov eax, [rtl8139_tcp_rx_count]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_tcp_synack_msg
+    call pm_print_string
+    mov eax, [rtl8139_tcp_synack_count]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_tcp_ack_tx_msg
+    call pm_print_string
+    mov eax, [rtl8139_tcp_ack_tx_count]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_tcp_src_ip_msg
+    call pm_print_string
+    mov esi, rtl8139_tcp_last_src_ip
+    call rtl8139_dump_ip
+    call pm_newline
+
+    mov esi, rtl8139_tcp_src_port_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_tcp_last_src_port]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_tcp_flags_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_tcp_last_flags]
+    call pm_print_hex32
+    call pm_newline
+    ret
+
+rtl8139_print_tcp_state:
+    cmp byte [rtl8139_tcp_state], TCP_STATE_SYN_SENT
+    je .syn_sent
+    cmp byte [rtl8139_tcp_state], TCP_STATE_ESTABLISHED
+    je .established
+    mov esi, rtl8139_tcp_state_closed_msg
+    call pm_print_string
+    ret
+.syn_sent:
+    mov esi, rtl8139_tcp_state_syn_sent_msg
+    call pm_print_string
+    ret
+.established:
+    mov esi, rtl8139_tcp_state_established_msg
+    call pm_print_string
+    ret
+
 rtl8139_build_icmp_echo_request:
     pushad
 
@@ -799,6 +988,184 @@ rtl8139_build_udp_packet:
     loop .copy_payload
 
     mov dword [rtl8139_tx_len], 60
+
+    popad
+    ret
+
+rtl8139_build_tcp_syn:
+    pushad
+
+    mov edi, rtl8139_tx_buffer
+    mov ecx, 2048
+    xor eax, eax
+    rep stosb
+
+    mov edi, rtl8139_tx_buffer
+    call rtl8139_write_ipv4_tcp_frame_prefix
+
+    mov ax, [rtl8139_tcp_src_port]
+    xchg al, ah
+    stosw
+
+    mov ax, [rtl8139_tcp_dst_port]
+    xchg al, ah
+    stosw
+
+    mov eax, [rtl8139_tcp_seq]
+    call rtl8139_stos_be32
+
+    xor eax, eax
+    call rtl8139_stos_be32
+
+    mov al, 50h
+    stosb
+    mov al, 02h
+    stosb
+    mov al, 40h
+    stosb
+    xor al, al
+    stosb
+    xor ax, ax
+    stosw
+    stosw
+
+    call rtl8139_finish_tcp_checksum
+    mov dword [rtl8139_tx_len], 60
+
+    popad
+    ret
+
+rtl8139_build_tcp_ack:
+    pushad
+
+    mov edi, rtl8139_tx_buffer
+    mov ecx, 2048
+    xor eax, eax
+    rep stosb
+
+    mov edi, rtl8139_tx_buffer
+    call rtl8139_write_ipv4_tcp_frame_prefix
+
+    mov ax, [rtl8139_tcp_src_port]
+    xchg al, ah
+    stosw
+
+    mov ax, [rtl8139_tcp_dst_port]
+    xchg al, ah
+    stosw
+
+    mov eax, [rtl8139_tcp_seq]
+    inc eax
+    call rtl8139_stos_be32
+
+    mov eax, [rtl8139_tcp_last_seq]
+    inc eax
+    call rtl8139_stos_be32
+
+    mov al, 50h
+    stosb
+    mov al, 10h
+    stosb
+    mov al, 40h
+    stosb
+    xor al, al
+    stosb
+    xor ax, ax
+    stosw
+    stosw
+
+    call rtl8139_finish_tcp_checksum
+    mov dword [rtl8139_tx_len], 60
+
+    popad
+    ret
+
+rtl8139_write_ipv4_tcp_frame_prefix:
+    mov esi, rtl8139_gateway_mac
+    mov ecx, 6
+.copy_dst:
+    lodsb
+    stosb
+    loop .copy_dst
+
+    mov esi, rtl8139_mac
+    mov ecx, 6
+.copy_src:
+    lodsb
+    stosb
+    loop .copy_src
+
+    mov al, 08h
+    stosb
+    mov al, 00h
+    stosb
+
+    mov ax, 20 + 20
+    mov bl, 06h
+    mov esi, rtl8139_gateway_ip
+    call rtl8139_write_ipv4_header
+    ret
+
+rtl8139_stos_be32:
+    push eax
+    shr eax, 24
+    stosb
+    pop eax
+    push eax
+    shr eax, 16
+    stosb
+    pop eax
+    push eax
+    shr eax, 8
+    stosb
+    pop eax
+    stosb
+    ret
+
+rtl8139_finish_tcp_checksum:
+    pushad
+
+    mov edi, rtl8139_tcp_checksum_buffer
+    mov ecx, 64
+    xor eax, eax
+    rep stosb
+
+    mov edi, rtl8139_tcp_checksum_buffer
+    mov esi, rtl8139_local_ip
+    mov ecx, 4
+.copy_src_ip:
+    lodsb
+    stosb
+    loop .copy_src_ip
+
+    mov esi, rtl8139_gateway_ip
+    mov ecx, 4
+.copy_dst_ip:
+    lodsb
+    stosb
+    loop .copy_dst_ip
+
+    xor al, al
+    stosb
+    mov al, 06h
+    stosb
+    xor al, al
+    stosb
+    mov al, 20
+    stosb
+
+    mov esi, rtl8139_tx_buffer + 34
+    mov ecx, 20
+.copy_tcp:
+    lodsb
+    stosb
+    loop .copy_tcp
+
+    mov esi, rtl8139_tcp_checksum_buffer
+    mov ecx, 12 + 20
+    call rtl8139_checksum
+    mov [rtl8139_tx_buffer + 50], ah
+    mov [rtl8139_tx_buffer + 51], al
 
     popad
     ret
@@ -1245,6 +1612,25 @@ rtl8139_udp_src_ip_msg db 'src IP: ',0
 rtl8139_udp_src_port_msg db 'src port: ',0
 rtl8139_udp_dst_port_msg db 'dst port: ',0
 rtl8139_udp_len_msg db 'length: ',0
+rtl8139_tcp_dst_port_text db '80',0
+rtl8139_tcpconnect_usage_msg db 'Usage: tcpconnect 10.0.2.2 80',13,0
+rtl8139_tcp_syn_sent_msg db 'TCP SYN sent',13,0
+rtl8139_tcp_syn_wait_msg db 'TCP state: SYN_SENT',13,0
+rtl8139_tcp_established_msg db 'TCP state: ESTABLISHED',13,0
+rtl8139_tcp_no_arp_msg db 'TCP failed: gateway MAC unknown',13,0
+rtl8139_tcpstat_msg db 'TCP state:',13,0
+rtl8139_tcp_state_msg db 'state=',0
+rtl8139_tcp_state_closed_msg db 'CLOSED',13,0
+rtl8139_tcp_state_syn_sent_msg db 'SYN_SENT',13,0
+rtl8139_tcp_state_established_msg db 'ESTABLISHED',13,0
+rtl8139_tcp_tx_msg db 'tcp_tx=',0
+rtl8139_tcp_rx_msg db 'tcp_rx=',0
+rtl8139_tcp_synack_msg db 'synack_rx=',0
+rtl8139_tcp_ack_tx_msg db 'ack_tx=',0
+rtl8139_tcp_packet_msg db 'TCP packet',13,0
+rtl8139_tcp_src_ip_msg db 'src IP: ',0
+rtl8139_tcp_src_port_msg db 'src port: ',0
+rtl8139_tcp_flags_msg db 'flags: ',0
 rtl8139_pingdebug_msg db 'PINGDEBUG TX IPv4/ICMP',13,0
 rtl8139_pingdebug_ethertype_msg db 'ethertype: ',0
 rtl8139_pingdebug_ipv4_len_msg db 'IPv4 len: ',0
@@ -3583,6 +3969,8 @@ rtl8139_rx_process_packet_quiet:
     je .icmp
     cmp byte [esi + 23], 11h
     je .udp
+    cmp byte [esi + 23], 06h
+    je .tcp
     jmp .advance
 
 .icmp:
@@ -3634,6 +4022,10 @@ rtl8139_rx_process_packet_quiet:
     or eax, edx
     mov [rtl8139_last_udp_len], ax
     inc dword [rtl8139_udp_rx_count]
+    jmp .advance
+
+.tcp:
+    call rtl8139_rx_record_tcp_current
 
 .advance:
     call rtl8139_rx_advance_current
@@ -3722,6 +4114,8 @@ rtl8139_rx_parse_current:
     je .icmp_ipv4
     cmp byte [esi + 23], 11h
     je .udp_ipv4
+    cmp byte [esi + 23], 06h
+    je .tcp_ipv4
     jmp .done
 
 .icmp_ipv4:
@@ -3814,6 +4208,100 @@ rtl8139_rx_parse_current:
     movzx eax, word [rtl8139_last_udp_len]
     call pm_print_uint32
     call pm_newline
+    jmp .done
+
+.tcp_ipv4:
+    call rtl8139_rx_record_tcp_current
+    mov esi, rtl8139_tcp_packet_msg
+    call pm_print_string
+    mov esi, rtl8139_tcp_src_ip_msg
+    call pm_print_string
+    mov esi, rtl8139_tcp_last_src_ip
+    call rtl8139_dump_ip
+    call pm_newline
+    mov esi, rtl8139_tcp_src_port_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_tcp_last_src_port]
+    call pm_print_uint32
+    call pm_newline
+    mov esi, rtl8139_tcp_flags_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_tcp_last_flags]
+    call pm_print_hex32
+    call pm_newline
+    jmp .done
+
+.done:
+    popad
+    ret
+
+rtl8139_rx_record_tcp_current:
+    pushad
+
+    cmp byte [esi + 23], 06h
+    jne .done
+
+    mov al, [esi + 26]
+    mov [rtl8139_tcp_last_src_ip], al
+    mov al, [esi + 27]
+    mov [rtl8139_tcp_last_src_ip + 1], al
+    mov al, [esi + 28]
+    mov [rtl8139_tcp_last_src_ip + 2], al
+    mov al, [esi + 29]
+    mov [rtl8139_tcp_last_src_ip + 3], al
+
+    movzx eax, byte [esi + 34]
+    shl eax, 8
+    movzx edx, byte [esi + 35]
+    or eax, edx
+    mov [rtl8139_tcp_last_src_port], ax
+
+    movzx eax, byte [esi + 36]
+    shl eax, 8
+    movzx edx, byte [esi + 37]
+    or eax, edx
+    mov [rtl8139_tcp_last_dst_port], ax
+
+    movzx eax, byte [esi + 38]
+    shl eax, 8
+    movzx edx, byte [esi + 39]
+    or eax, edx
+    shl eax, 8
+    movzx edx, byte [esi + 40]
+    or eax, edx
+    shl eax, 8
+    movzx edx, byte [esi + 41]
+    or eax, edx
+    mov [rtl8139_tcp_last_seq], eax
+
+    movzx eax, byte [esi + 42]
+    shl eax, 8
+    movzx edx, byte [esi + 43]
+    or eax, edx
+    shl eax, 8
+    movzx edx, byte [esi + 44]
+    or eax, edx
+    shl eax, 8
+    movzx edx, byte [esi + 45]
+    or eax, edx
+    mov [rtl8139_tcp_last_ack], eax
+
+    mov al, [esi + 47]
+    mov [rtl8139_tcp_last_flags], al
+    inc dword [rtl8139_tcp_rx_count]
+
+    mov ax, [rtl8139_tcp_last_src_port]
+    cmp ax, [rtl8139_tcp_dst_port]
+    jne .done
+    mov ax, [rtl8139_tcp_last_dst_port]
+    cmp ax, [rtl8139_tcp_src_port]
+    jne .done
+    mov al, [rtl8139_tcp_last_flags]
+    and al, 12h
+    cmp al, 12h
+    jne .done
+
+    inc dword [rtl8139_tcp_synack_count]
 
 .done:
     popad

@@ -183,6 +183,14 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_udpstat
 
+    mov edi, pm_cmd_tcpconnect
+    call pm_starts_with_word
+    jc pm_do_tcpconnect
+
+    mov edi, pm_cmd_tcpstat
+    call pm_starts_with_word
+    jc pm_do_tcpstat
+
     mov edi, pm_cmd_pingfake
     call pm_starts_with_word
     jc pm_do_pingfake
@@ -483,6 +491,14 @@ pm_do_udpstat:
     call rtl8139_udpstat
     jmp shell32_loop
 
+pm_do_tcpconnect:
+    call rtl8139_tcpconnect_cmd
+    jmp shell32_loop
+
+pm_do_tcpstat:
+    call rtl8139_tcpstat
+    jmp shell32_loop
+
 pm_do_pingfake:
     call rtl8139_pingfake
     jmp shell32_loop
@@ -711,7 +727,7 @@ pm_help_msg db \
 'lspci netdev netup netstat netdiag netbar',13,\
 'mac setmac randommac',13,\
 'txdemo txdump pktdump pktinfo txstatus',13,\
-'pinggw ping pingtest pingdebug udpsend udpstat pingfake arp arpfake arpstat txreal',13,\
+'pinggw ping pingtest pingdebug udpsend udpstat tcpconnect tcpstat pingfake arp arpfake arpstat txreal',13,\
 'rxdump netreset netclear rxpoll rxpeek rxpacket rxipv4dump rxkick rxdebug rxreset rxmode rxtest rxstatus',13,\
 'regs stack uptime panic',13,\
 'tasks yield',13,\
@@ -772,6 +788,8 @@ pm_cmd_pingtest db 'pingtest',0
 pm_cmd_pingdebug db 'pingdebug',0
 pm_cmd_udpsend db 'udpsend',0
 pm_cmd_udpstat db 'udpstat',0
+pm_cmd_tcpconnect db 'tcpconnect',0
+pm_cmd_tcpstat db 'tcpstat',0
 pm_cmd_pingfake db 'pingfake',0
 pm_cmd_arpfake db 'arpfake',0
 pm_cmd_arp db 'arp',0

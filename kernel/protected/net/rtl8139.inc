@@ -60,6 +60,8 @@ rtl8139_error_count dd 0
 rtl8139_tx_len dd 0
 rtl8139_tx_slot db 0
 rtl8139_last_tx_slot db 0
+rtl8139_last_tsd_before dd 0
+rtl8139_last_tsd_after dd 0
 rtl8139_rxtest_first_before dd 0
 rtl8139_rxtest_first_after dd 0
 rtl8139_rxtest_cbr_before dw 0
@@ -103,6 +105,7 @@ rtl8139_arp_wait_first dd 0
 rtl8139_arp_wait_cbr dw 0
 rtl8139_local_ip db 10,0,2,15
 rtl8139_gateway_ip db 10,0,2,2
+rtl8139_ipv4_tmp_protocol db 0
 
 rtl8139_mac:
 db 52h,54h,00h,12h,34h,56h
@@ -277,6 +280,8 @@ rtl8139_netreset:
     mov dword [rtl8139_error_count], 0
     mov dword [rtl8139_rx_offset], 0
     mov byte [rtl8139_tx_slot], 0
+    mov dword [rtl8139_last_tsd_before], 0
+    mov dword [rtl8139_last_tsd_after], 0
     mov word [rtl8139_last_cbr], 0
     mov dword [rtl8139_arp_reply_count], 0
     mov dword [rtl8139_icmp_reply_count], 0
@@ -507,14 +512,26 @@ rtl8139_pinggw:
     cmp byte [rtl8139_gateway_mac_known], 1
     jne .no_arp
 
+    mov dword [rtl8139_icmp_reply_count], 0
     call rtl8139_build_icmp_echo_request
-    call rtl8139_dump_icmp_tx_packet
-    call rtl8139_icmp_tx_submit_current
+    call rtl8139_tx_submit_current_quiet
 
     mov esi, rtl8139_ping_sent_msg
     call pm_print_string
-    call rtl8139_rxpoll
-    call rtl8139_rxpacket
+    mov ecx, 20
+.poll:
+    push ecx
+    call rtl8139_wait_for_rx_activity
+    call rtl8139_rx_process_packet_quiet
+    pop ecx
+    cmp dword [rtl8139_icmp_reply_count], 0
+    jne .reply
+    loop .poll
+    ret
+
+.reply:
+    mov esi, rtl8139_icmp_reply_msg
+    call pm_print_string
     ret
 
 .no_arp:
@@ -563,45 +580,10 @@ rtl8139_build_icmp_echo_request:
     mov al, 00h
     stosb
 
-    ; IPv4 header.
-    mov al, 45h
-    stosb
-    mov al, 00h
-    stosb
-    mov al, 00h
-    stosb
-    mov al, 24h        ; total length = 20 + 8 + 8
-    stosb
-    mov al, 00h
-    stosb
-    mov al, 01h        ; identification
-    stosb
-    mov al, 00h
-    stosb
-    mov al, 00h
-    stosb
-    mov al, 40h
-    stosb
-    mov al, 01h
-    stosb
-    mov al, 00h
-    stosb
-    mov al, 00h
-    stosb
-
-    mov esi, rtl8139_local_ip
-    mov ecx, 4
-.copy_src_ip:
-    lodsb
-    stosb
-    loop .copy_src_ip
-
+    mov ax, 20 + 8 + rtl8139_icmp_payload_len
+    mov bl, 01h
     mov esi, rtl8139_gateway_ip
-    mov ecx, 4
-.copy_dst_ip:
-    lodsb
-    stosb
-    loop .copy_dst_ip
+    call rtl8139_write_ipv4_header
 
     ; ICMP echo request
     mov al, 08h        ; type echo request
@@ -632,12 +614,6 @@ rtl8139_build_icmp_echo_request:
     stosb
     loop .copy_payload
 
-    mov esi, rtl8139_tx_buffer + 14
-    mov ecx, 20
-    call rtl8139_checksum
-    mov [rtl8139_tx_buffer + 24], ah
-    mov [rtl8139_tx_buffer + 25], al
-
     mov esi, rtl8139_tx_buffer + 34
     mov ecx, 8 + rtl8139_icmp_payload_len
     call rtl8139_checksum
@@ -650,18 +626,83 @@ rtl8139_build_icmp_echo_request:
     popad
     ret
 
+; EDI=IPv4 header destination, AX=IPv4 total length, BL=protocol, ESI=dst IP.
+; Returns EDI advanced past the 20-byte header.
+rtl8139_write_ipv4_header:
+    push eax
+    push ebx
+    push ecx
+    push edx
+    push esi
+
+    mov edx, edi
+    mov [rtl8139_ipv4_tmp_protocol], bl
+    mov bx, ax
+
+    mov al, 45h
+    stosb
+    xor al, al
+    stosb
+    mov al, bh
+    stosb
+    mov al, bl
+    stosb
+    mov al, 00h
+    stosb
+    mov al, 01h
+    stosb
+    xor al, al
+    stosb
+    stosb
+    mov al, 40h
+    stosb
+    mov al, [rtl8139_ipv4_tmp_protocol]
+    stosb
+    xor al, al
+    stosb
+    stosb
+
+    mov esi, rtl8139_local_ip
+    mov ecx, 4
+.copy_src_ip:
+    lodsb
+    stosb
+    loop .copy_src_ip
+
+    mov esi, [esp]
+    mov ecx, 4
+.copy_dst_ip:
+    lodsb
+    stosb
+    loop .copy_dst_ip
+
+    push edx
+    mov esi, edx
+    mov ecx, 20
+    call rtl8139_checksum
+    pop edx
+    mov [edx + 10], ah
+    mov [edx + 11], al
+
+    pop esi
+    pop edx
+    pop ecx
+    pop ebx
+    pop eax
+    ret
+
 rtl8139_ensure_gateway_mac:
     cmp byte [rtl8139_gateway_mac_known], 1
     je .done
 
     call rtl8139_build_arp_request
-    call rtl8139_tx_submit_current
+    call rtl8139_tx_submit_current_quiet
 
     mov ecx, 4
 .process:
     push ecx
     call rtl8139_wait_for_rx_activity
-    call rtl8139_rx_process_packet
+    call rtl8139_rx_process_packet_quiet
     pop ecx
     cmp byte [rtl8139_gateway_mac_known], 1
     je .done
@@ -733,12 +774,9 @@ rtl8139_pingtest:
     call pm_print_string
 
     call rtl8139_build_icmp_echo_request
-    call rtl8139_dump_icmp_tx_packet
-    call rtl8139_icmp_tx_submit_current
+    call rtl8139_tx_submit_current_quiet
 
-    mov dx, [rtl8139_io_base]
-    add dx, RTL8139_TSD0
-    in eax, dx
+    mov eax, [rtl8139_last_tsd_after]
     mov [rtl8139_pingtest_tsd], eax
 
     mov ecx, 80
@@ -749,8 +787,7 @@ rtl8139_pingtest:
     add dx, RTL8139_ISR
     in ax, dx
     or [rtl8139_pingtest_isr], ax
-    call rtl8139_rxpoll
-    call rtl8139_rxpacket
+    call rtl8139_rx_process_packet_quiet
     pop ecx
     cmp dword [rtl8139_icmp_reply_count], 0
     jne .summary
@@ -830,29 +867,6 @@ rtl8139_pingtest_summary:
     movzx eax, word [rtl8139_last_icmp_seq]
     call pm_print_uint32
     call pm_newline
-    ret
-
-rtl8139_pingtxdebug:
-    cmp byte [rtl8139_initialized], 1
-    jne .not_ready
-
-    cmp byte [rtl8139_gateway_mac_known], 1
-    jne .no_arp
-
-    call rtl8139_build_icmp_echo_request
-    call rtl8139_dump_icmp_tx_packet
-    call rtl8139_icmp_tx_submit_current
-    ret
-
-.no_arp:
-    mov esi, rtl8139_ping_no_arp_msg
-    call pm_print_string
-    ret
-
-.not_ready:
-    inc dword [rtl8139_error_count]
-    mov esi, rtl8139_not_ready_msg
-    call pm_print_string
     ret
 
 rtl8139_pingdebug:
@@ -1028,12 +1042,6 @@ rtl8139_dump_icmp_tx_packet:
     popad
     ret
 
-rtl8139_icmp_tx_submit_current:
-    mov esi, rtl8139_icmp_tx_submit_msg
-    call pm_print_string
-    call rtl8139_tx_submit_current
-    ret
-
 rtl8139_gateway_ip_text db '10.0.2.2',0
 rtl8139_icmp_payload db 'GHOSTOS!'
 rtl8139_icmp_payload_len equ $ - rtl8139_icmp_payload
@@ -1065,7 +1073,6 @@ rtl8139_pingdebug_icmp_seq_msg db 'ICMP seq: ',0
 rtl8139_pingdebug_icmp_total_len_msg db 'ICMP total len: ',0
 rtl8139_pingdebug_payload_len_msg db 'payload len: ',0
 rtl8139_pingdebug_payload_bytes_msg db 'ICMP payload bytes:',13,0
-rtl8139_icmp_tx_submit_msg db 'ICMP TX submit',13,0
 
 rtl8139_checksum:
     call rtl8139_checksum_raw_sum
@@ -1497,9 +1504,7 @@ rtl8139_txreal:
     ret
 
 rtl8139_tx_submit_current:
-    mov al, [rtl8139_tx_slot]
-    and al, 03h
-    mov [rtl8139_last_tx_slot], al
+    call rtl8139_tx_submit_current_quiet
 
     mov esi, rtl8139_tx_slot_msg
     call pm_print_string
@@ -1521,14 +1526,31 @@ rtl8139_tx_submit_current:
 
     mov esi, rtl8139_tsd_before_msg
     call pm_print_string
+    mov eax, [rtl8139_last_tsd_before]
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_tsd_after_msg
+    call pm_print_string
+    mov eax, [rtl8139_last_tsd_after]
+    call pm_print_hex32
+    call pm_newline
+    mov ebx, [rtl8139_last_tsd_after]
+    call rtl8139_print_tsd_flags
+    ret
+
+rtl8139_tx_submit_current_quiet:
+    mov al, [rtl8139_tx_slot]
+    and al, 03h
+    mov [rtl8139_last_tx_slot], al
+
     movzx bx, byte [rtl8139_last_tx_slot]
     shl bx, 2
     mov dx, [rtl8139_io_base]
     add dx, RTL8139_TSD0
     add dx, bx
     in eax, dx
-    call pm_print_hex32
-    call pm_newline
+    mov [rtl8139_last_tsd_before], eax
 
     ; TSADn = physical address of TX buffer
     movzx bx, byte [rtl8139_last_tx_slot]
@@ -1562,13 +1584,7 @@ rtl8139_tx_submit_current:
     loop .wait_tx
 
 .tx_done:
-    mov ebx, eax
-    mov esi, rtl8139_tsd_after_msg
-    call pm_print_string
-    mov eax, ebx
-    call pm_print_hex32
-    call pm_newline
-    call rtl8139_print_tsd_flags
+    mov [rtl8139_last_tsd_after], eax
 
     inc byte [rtl8139_tx_slot]
     and byte [rtl8139_tx_slot], 03h
@@ -3295,6 +3311,116 @@ rtl8139_rxipv4dump:
 .not_ready:
     mov esi, rtl8139_rxpeek_notready_msg
     call pm_print_string
+    ret
+
+rtl8139_rx_process_packet_quiet:
+    pushad
+
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CBR
+    in ax, dx
+    mov [rtl8139_cbr_snapshot], ax
+
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CR
+    in al, dx
+    test al, RTL8139_CR_BUFE
+    jnz .done
+
+    movzx eax, word [rtl8139_cbr_snapshot]
+    and eax, RTL8139_RX_RING_MASK
+    cmp eax, [rtl8139_rx_offset]
+    je .done
+
+    mov ebx, [rtl8139_rx_offset]
+    and ebx, RTL8139_RX_RING_MASK
+    mov [rtl8139_rx_offset], ebx
+
+    movzx edx, word [rtl8139_rx_buffer + ebx + 2]
+    cmp edx, 14
+    jb .discard
+    cmp edx, 1600
+    ja .discard
+
+    mov esi, rtl8139_rx_buffer
+    add esi, ebx
+    add esi, 4
+
+    cmp byte [esi + 12], 08h
+    jne .advance
+    cmp byte [esi + 13], 06h
+    je .arp
+    cmp byte [esi + 13], 00h
+    je .ipv4
+    jmp .advance
+
+.arp:
+    cmp edx, 42
+    jb .advance
+    cmp byte [esi + 20], 00h
+    jne .advance
+    cmp byte [esi + 21], 02h
+    jne .advance
+    cmp byte [esi + 28], 10
+    jne .advance
+    cmp byte [esi + 29], 0
+    jne .advance
+    cmp byte [esi + 30], 2
+    jne .advance
+    cmp byte [esi + 31], 2
+    jne .advance
+
+    push esi
+    add esi, 22
+    mov edi, rtl8139_gateway_mac
+    mov ecx, 6
+.copy_gateway_mac:
+    lodsb
+    stosb
+    loop .copy_gateway_mac
+    pop esi
+    mov byte [rtl8139_gateway_mac_known], 1
+    inc dword [rtl8139_arp_reply_count]
+    jmp .advance
+
+.ipv4:
+    cmp edx, 42
+    jb .advance
+    cmp byte [esi + 14], 45h
+    jne .advance
+    cmp byte [esi + 23], 01h
+    jne .advance
+    cmp byte [esi + 34], 00h
+    jne .advance
+    cmp byte [esi + 35], 00h
+    jne .advance
+
+    mov al, [esi + 26]
+    mov [rtl8139_last_icmp_src_ip], al
+    mov al, [esi + 27]
+    mov [rtl8139_last_icmp_src_ip + 1], al
+    mov al, [esi + 28]
+    mov [rtl8139_last_icmp_src_ip + 2], al
+    mov al, [esi + 29]
+    mov [rtl8139_last_icmp_src_ip + 3], al
+    mov al, [esi + 22]
+    mov [rtl8139_last_icmp_ttl], al
+    movzx eax, byte [esi + 40]
+    shl eax, 8
+    movzx edx, byte [esi + 41]
+    or eax, edx
+    mov [rtl8139_last_icmp_seq], ax
+    inc dword [rtl8139_icmp_reply_count]
+
+.advance:
+    call rtl8139_rx_advance_current
+    jmp .done
+
+.discard:
+    call rtl8139_rx_discard_to_cbr
+
+.done:
+    popad
     ret
 
 rtl8139_rx_parse_current:

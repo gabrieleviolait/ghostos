@@ -182,3 +182,27 @@ QEMU E1000:
 ```sh
 qemu-system-i386 -drive file=build/ghostos.img,format=raw,if=floppy -vga std -netdev user,id=n0 -device e1000,netdev=n0
 ```
+
+## v1.5-alpha - RTL8139 incremental RX/TX diagnostics
+
+- Fatto: `rxstatus` mostra CR, RCR, ISR, IMR, CAPR e CBR.
+- Fatto: init RTL8139 stabilizzato con reset software bounded, RBSTART,
+  RCR `0x078F`, IMR per ROK/TOK/RXER/TXER, ack ISR iniziale e CR RX/TX.
+- Fatto: `rxpoll` legge ISR, non produce RX/TX OK falsi con ISR zero,
+  conta RX OK, TX OK ed errori, e ack-a solo i bit letti.
+- Fatto: `rxpeek` mostra 64 byte del ring e `rxpacket` mostra status,
+  length e primi 64 byte del frame corrente.
+- Fatto: parser minimo RX per ARP reply gateway e ICMP echo reply.
+- Fatto: comandi `arpstat`, `pinggw` e `netdiag`.
+- Non fatto: parsing Ethernet/IP completo, UDP, TCP, DNS, HTTP, browser
+  networking, SOCKS5 o Tor reale.
+
+## Tor-only networking future
+
+- Design-only: Ghost OS non fara' clearnet diretto a livello applicativo.
+- Ogni futuro client userland dovra' passare da un proxy/Tor gateway
+  controllato, senza socket applicativi diretti verso Internet.
+- Prima di Tor servono fondamenta misurabili e CLI-only: Ethernet RX/TX,
+  ARP, IPv4, ICMP, UDP e TCP minimi, con diagnostica e contatori affidabili.
+- Fuori scope per v1.5-alpha: client Tor, SOCKS5, HTTP, TLS, browser
+  networking e qualsiasi dipendenza esterna.

@@ -131,6 +131,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_netdev
 
+    mov edi, pm_cmd_netbar
+    call pm_starts_with_word
+    jc pm_do_netbar
+
     mov edi, pm_cmd_netup
     call pm_starts_with_word
     jc pm_do_netup
@@ -138,6 +142,10 @@ shell32_loop:
     mov edi, pm_cmd_netstat
     call pm_starts_with_word
     jc pm_do_netstat
+
+    mov edi, pm_cmd_netdiag
+    call pm_starts_with_word
+    jc pm_do_netdiag
 
     mov edi, pm_cmd_mac
     call pm_starts_with_word
@@ -151,6 +159,14 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_randommac
 
+    mov edi, pm_cmd_pinggw
+    call pm_starts_with_word
+    jc pm_do_pinggw
+
+    mov edi, pm_cmd_ping
+    call pm_starts_with_word
+    jc pm_do_pinggw
+
     mov edi, pm_cmd_pingfake
     call pm_starts_with_word
     jc pm_do_pingfake
@@ -158,6 +174,10 @@ shell32_loop:
     mov edi, pm_cmd_arpfake
     call pm_starts_with_word
     jc pm_do_arpfake
+
+    mov edi, pm_cmd_arpstat
+    call pm_starts_with_word
+    jc pm_do_arpstat
 
     mov edi, pm_cmd_txdemo
     call pm_starts_with_word
@@ -194,6 +214,10 @@ shell32_loop:
     mov edi, pm_cmd_rxpeek
     call pm_starts_with_word
     jc pm_do_rxpeek
+
+    mov edi, pm_cmd_rxpacket
+    call pm_starts_with_word
+    jc pm_do_rxpacket
 
     mov edi, pm_cmd_rxstatus
     call pm_starts_with_word
@@ -363,12 +387,20 @@ pm_do_netdev:
     call pm_pci_print_netdev
     jmp shell32_loop
 
+pm_do_netbar:
+    call rtl8139_netbar
+    jmp shell32_loop
+
 pm_do_netup:
     call rtl8139_netup
     jmp shell32_loop
 
 pm_do_netstat:
     call rtl8139_netstat
+    jmp shell32_loop
+
+pm_do_netdiag:
+    call rtl8139_netdiag
     jmp shell32_loop
 
 pm_do_mac:
@@ -383,12 +415,20 @@ pm_do_randommac:
     call rtl8139_randommac
     jmp shell32_loop
 
+pm_do_pinggw:
+    call rtl8139_pinggw
+    jmp shell32_loop
+
 pm_do_pingfake:
     call rtl8139_pingfake
     jmp shell32_loop
 
 pm_do_arpfake:
     call rtl8139_arpfake
+    jmp shell32_loop
+
+pm_do_arpstat:
+    call rtl8139_arpstat
     jmp shell32_loop
 
 pm_do_txdemo:
@@ -425,6 +465,10 @@ pm_do_rxpoll:
 
 pm_do_rxpeek:
     call rtl8139_rxpeek
+    jmp shell32_loop
+
+pm_do_rxpacket:
+    call rtl8139_rxpacket
     jmp shell32_loop
 
 pm_do_rxstatus:
@@ -572,11 +616,11 @@ pm_help_msg db \
 'Commands:',13,\
 'help cls clear echo version',13,\
 'mem heapinfo memmap pages',13,\
-'lspci netdev netup netstat',13,\
+'lspci netdev netup netstat netdiag netbar',13,\
 'mac setmac randommac',13,\
 'txdemo txdump pktdump pktinfo txstatus',13,\
-'pingfake arpfake txreal',13,\
-'rxdump netreset netclear rxpoll rxpeek rxstatus',13,\
+'pinggw ping pingfake arpfake arpstat txreal',13,\
+'rxdump netreset netclear rxpoll rxpeek rxpacket rxstatus',13,\
 'regs stack uptime panic',13,\
 'tasks yield',13,\
 'ls cat browse run halt',13,0
@@ -623,13 +667,18 @@ pm_cmd_mem db 'mem',0
 pm_cmd_heapinfo db 'heapinfo',0
 pm_cmd_lspci db 'lspci',0
 pm_cmd_netdev db 'netdev',0
+pm_cmd_netbar db 'netbar',0
 pm_cmd_netup db 'netup',0
 pm_cmd_netstat db 'netstat',0
+pm_cmd_netdiag db 'netdiag',0
 pm_cmd_mac db 'mac',0
 pm_cmd_setmac db 'setmac',0
 pm_cmd_randommac db 'randommac',0
+pm_cmd_pinggw db 'pinggw',0
+pm_cmd_ping db 'ping',0
 pm_cmd_pingfake db 'pingfake',0
 pm_cmd_arpfake db 'arpfake',0
+pm_cmd_arpstat db 'arpstat',0
 pm_cmd_txdemo db 'txdemo',0
 pm_cmd_txdump db 'txdump',0
 pm_cmd_txreal db 'txreal',0
@@ -639,6 +688,7 @@ pm_cmd_pktdump db 'pktdump',0
 pm_cmd_rxdump db 'rxdump',0
 pm_cmd_rxpoll db 'rxpoll',0
 pm_cmd_rxpeek db 'rxpeek',0
+pm_cmd_rxpacket db 'rxpacket',0
 pm_cmd_rxstatus db 'rxstatus',0
 pm_cmd_netreset db 'netreset',0
 pm_cmd_netclear db 'netclear',0
@@ -651,4 +701,3 @@ pm_cmd_memmap db 'memmap',0
 pm_cmd_tasks db 'tasks',0
 pm_cmd_yield db 'yield',0
 pm_cmd_halt db 'halt',0
-

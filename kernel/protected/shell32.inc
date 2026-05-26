@@ -219,6 +219,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_rxpacket
 
+    mov edi, pm_cmd_rxkick
+    call pm_starts_with_word
+    jc pm_do_rxkick
+
     mov edi, pm_cmd_rxstatus
     call pm_starts_with_word
     jc pm_do_rxstatus
@@ -471,6 +475,10 @@ pm_do_rxpacket:
     call rtl8139_rxpacket
     jmp shell32_loop
 
+pm_do_rxkick:
+    call rtl8139_rxkick
+    jmp shell32_loop
+
 pm_do_rxstatus:
     call rtl8139_rxstatus
     jmp shell32_loop
@@ -620,7 +628,7 @@ pm_help_msg db \
 'mac setmac randommac',13,\
 'txdemo txdump pktdump pktinfo txstatus',13,\
 'pinggw ping pingfake arpfake arpstat txreal',13,\
-'rxdump netreset netclear rxpoll rxpeek rxpacket rxstatus',13,\
+'rxdump netreset netclear rxpoll rxpeek rxpacket rxkick rxstatus',13,\
 'regs stack uptime panic',13,\
 'tasks yield',13,\
 'ls cat browse run halt',13,0
@@ -689,6 +697,7 @@ pm_cmd_rxdump db 'rxdump',0
 pm_cmd_rxpoll db 'rxpoll',0
 pm_cmd_rxpeek db 'rxpeek',0
 pm_cmd_rxpacket db 'rxpacket',0
+pm_cmd_rxkick db 'rxkick',0
 pm_cmd_rxstatus db 'rxstatus',0
 pm_cmd_netreset db 'netreset',0
 pm_cmd_netclear db 'netclear',0

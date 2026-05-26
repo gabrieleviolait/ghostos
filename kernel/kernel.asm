@@ -60,6 +60,7 @@ halt_cpu:
 %include "kernel/protected/browser32.inc"
 %include "kernel/protected/pci.inc"
 %include "kernel/protected/crypto/sha256.inc"
+%include "kernel/protected/crypto/hmac_sha256.inc"
 %include "kernel/protected/net/rtl8139.inc"
 %include "kernel/protected/syscalls.inc"
 %include "kernel/protected/gex.inc"

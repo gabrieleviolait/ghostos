@@ -95,10 +95,18 @@ rtl8139_gateway_mac:
 times 6 db 0
 rtl8139_arp_reply_count dd 0
 rtl8139_icmp_reply_count dd 0
+rtl8139_udp_tx_count dd 0
+rtl8139_udp_rx_count dd 0
 rtl8139_ping_seq dw 1
 rtl8139_last_icmp_seq dw 0
 rtl8139_last_icmp_ttl db 0
 rtl8139_last_icmp_src_ip db 0,0,0,0
+rtl8139_udp_src_port dw 49152
+rtl8139_udp_dst_port dw 1234
+rtl8139_last_udp_src_ip db 0,0,0,0
+rtl8139_last_udp_src_port dw 0
+rtl8139_last_udp_dst_port dw 0
+rtl8139_last_udp_len dw 0
 rtl8139_pingtest_tsd dd 0
 rtl8139_pingtest_isr dw 0
 rtl8139_arp_wait_first dd 0
@@ -285,6 +293,12 @@ rtl8139_netreset:
     mov word [rtl8139_last_cbr], 0
     mov dword [rtl8139_arp_reply_count], 0
     mov dword [rtl8139_icmp_reply_count], 0
+    mov dword [rtl8139_udp_tx_count], 0
+    mov dword [rtl8139_udp_rx_count], 0
+    mov dword [rtl8139_last_udp_src_ip], 0
+    mov word [rtl8139_last_udp_src_port], 0
+    mov word [rtl8139_last_udp_dst_port], 0
+    mov word [rtl8139_last_udp_len], 0
 
     mov esi, rtl8139_reset_msg
     call pm_print_string
@@ -299,6 +313,12 @@ rtl8139_netclear:
     mov dword [rtl8139_error_count], 0
     mov dword [rtl8139_arp_reply_count], 0
     mov dword [rtl8139_icmp_reply_count], 0
+    mov dword [rtl8139_udp_tx_count], 0
+    mov dword [rtl8139_udp_rx_count], 0
+    mov dword [rtl8139_last_udp_src_ip], 0
+    mov word [rtl8139_last_udp_src_port], 0
+    mov word [rtl8139_last_udp_dst_port], 0
+    mov word [rtl8139_last_udp_len], 0
 
     mov esi, rtl8139_clear_msg
     call pm_print_string
@@ -546,6 +566,102 @@ rtl8139_pinggw:
     call pm_print_string
     ret
 
+rtl8139_udpsend_cmd:
+    mov esi, pm_cmd_buffer
+    call pm_skip_first_word
+    call pm_skip_spaces
+
+    mov edi, rtl8139_gateway_ip_text
+    call pm_starts_with_word
+    jnc .usage
+
+    call pm_skip_first_word
+    call pm_skip_spaces
+    mov edi, rtl8139_udp_dst_port_text
+    call pm_starts_with_word
+    jnc .usage
+
+    mov word [rtl8139_udp_dst_port], 1234
+
+    cmp byte [rtl8139_initialized], 1
+    je .ready
+
+    call rtl8139_rxtest_quiet_netup
+    cmp byte [rtl8139_initialized], 1
+    jne .not_ready
+
+.ready:
+    call rtl8139_enable_pci_bus_master
+    call rtl8139_ensure_gateway_mac
+    cmp byte [rtl8139_gateway_mac_known], 1
+    jne .no_arp
+
+    call rtl8139_build_udp_packet
+    call rtl8139_tx_submit_current_quiet
+    inc dword [rtl8139_udp_tx_count]
+
+    mov esi, rtl8139_udp_sent_msg
+    call pm_print_string
+    ret
+
+.usage:
+    mov esi, rtl8139_udpsend_usage_msg
+    call pm_print_string
+    ret
+
+.no_arp:
+    inc dword [rtl8139_error_count]
+    mov esi, rtl8139_udp_no_arp_msg
+    call pm_print_string
+    ret
+
+.not_ready:
+    inc dword [rtl8139_error_count]
+    mov esi, rtl8139_not_ready_msg
+    call pm_print_string
+    ret
+
+rtl8139_udpstat:
+    mov esi, rtl8139_udpstat_msg
+    call pm_print_string
+
+    mov esi, rtl8139_udp_tx_msg
+    call pm_print_string
+    mov eax, [rtl8139_udp_tx_count]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_udp_rx_msg
+    call pm_print_string
+    mov eax, [rtl8139_udp_rx_count]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_udp_src_ip_msg
+    call pm_print_string
+    mov esi, rtl8139_last_udp_src_ip
+    call rtl8139_dump_ip
+    call pm_newline
+
+    mov esi, rtl8139_udp_src_port_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_last_udp_src_port]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_udp_dst_port_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_last_udp_dst_port]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_udp_len_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_last_udp_len]
+    call pm_print_uint32
+    call pm_newline
+    ret
+
 rtl8139_build_icmp_echo_request:
     pushad
 
@@ -621,6 +737,67 @@ rtl8139_build_icmp_echo_request:
     mov [rtl8139_tx_buffer + 37], al
 
     inc word [rtl8139_ping_seq]
+    mov dword [rtl8139_tx_len], 60
+
+    popad
+    ret
+
+rtl8139_build_udp_packet:
+    pushad
+
+    mov edi, rtl8139_tx_buffer
+    mov ecx, 2048
+    xor eax, eax
+    rep stosb
+
+    mov edi, rtl8139_tx_buffer
+
+    mov esi, rtl8139_gateway_mac
+    mov ecx, 6
+.copy_dst:
+    lodsb
+    stosb
+    loop .copy_dst
+
+    mov esi, rtl8139_mac
+    mov ecx, 6
+.copy_src:
+    lodsb
+    stosb
+    loop .copy_src
+
+    mov al, 08h
+    stosb
+    mov al, 00h
+    stosb
+
+    mov ax, 20 + 8 + rtl8139_udp_payload_len
+    mov bl, 11h
+    mov esi, rtl8139_gateway_ip
+    call rtl8139_write_ipv4_header
+
+    mov ax, [rtl8139_udp_src_port]
+    xchg al, ah
+    stosw
+
+    mov ax, [rtl8139_udp_dst_port]
+    xchg al, ah
+    stosw
+
+    mov ax, 8 + rtl8139_udp_payload_len
+    xchg al, ah
+    stosw
+
+    xor ax, ax
+    stosw
+
+    mov esi, rtl8139_udp_payload
+    mov ecx, rtl8139_udp_payload_len
+.copy_payload:
+    lodsb
+    stosb
+    loop .copy_payload
+
     mov dword [rtl8139_tx_len], 60
 
     popad
@@ -1045,6 +1222,9 @@ rtl8139_dump_icmp_tx_packet:
 rtl8139_gateway_ip_text db '10.0.2.2',0
 rtl8139_icmp_payload db 'GHOSTOS!'
 rtl8139_icmp_payload_len equ $ - rtl8139_icmp_payload
+rtl8139_udp_payload db 'GHOSTOS UDP'
+rtl8139_udp_payload_len equ $ - rtl8139_udp_payload
+rtl8139_udp_dst_port_text db '1234',0
 rtl8139_ping_usage_msg db 'Usage: ping 10.0.2.2',13,0
 rtl8139_ping_sent_msg db 'ICMP echo request sent',13,0
 rtl8139_ping_no_arp_msg db 'Ping failed: gateway MAC unknown',13,0
@@ -1054,6 +1234,17 @@ rtl8139_pingtest_arp_failed_msg db 'ARP failed',13,0
 rtl8139_pingtest_icmp_msg db 'ICMP reply: ',0
 rtl8139_pingtest_src_msg db 'src IP: ',0
 rtl8139_pingtest_seq_msg db 'seq: ',0
+rtl8139_udpsend_usage_msg db 'Usage: udpsend 10.0.2.2 1234',13,0
+rtl8139_udp_sent_msg db 'UDP sent',13,0
+rtl8139_udp_no_arp_msg db 'UDP failed: gateway MAC unknown',13,0
+rtl8139_udpstat_msg db 'UDP state:',13,0
+rtl8139_udp_tx_msg db 'udp_tx=',0
+rtl8139_udp_rx_msg db 'udp_rx=',0
+rtl8139_udp_packet_msg db 'UDP packet',13,0
+rtl8139_udp_src_ip_msg db 'src IP: ',0
+rtl8139_udp_src_port_msg db 'src port: ',0
+rtl8139_udp_dst_port_msg db 'dst port: ',0
+rtl8139_udp_len_msg db 'length: ',0
 rtl8139_pingdebug_msg db 'PINGDEBUG TX IPv4/ICMP',13,0
 rtl8139_pingdebug_ethertype_msg db 'ethertype: ',0
 rtl8139_pingdebug_ipv4_len_msg db 'IPv4 len: ',0
@@ -3389,7 +3580,12 @@ rtl8139_rx_process_packet_quiet:
     cmp byte [esi + 14], 45h
     jne .advance
     cmp byte [esi + 23], 01h
-    jne .advance
+    je .icmp
+    cmp byte [esi + 23], 11h
+    je .udp
+    jmp .advance
+
+.icmp:
     cmp byte [esi + 34], 00h
     jne .advance
     cmp byte [esi + 35], 00h
@@ -3411,6 +3607,33 @@ rtl8139_rx_process_packet_quiet:
     or eax, edx
     mov [rtl8139_last_icmp_seq], ax
     inc dword [rtl8139_icmp_reply_count]
+    jmp .advance
+
+.udp:
+    mov al, [esi + 26]
+    mov [rtl8139_last_udp_src_ip], al
+    mov al, [esi + 27]
+    mov [rtl8139_last_udp_src_ip + 1], al
+    mov al, [esi + 28]
+    mov [rtl8139_last_udp_src_ip + 2], al
+    mov al, [esi + 29]
+    mov [rtl8139_last_udp_src_ip + 3], al
+    movzx eax, byte [esi + 34]
+    shl eax, 8
+    movzx edx, byte [esi + 35]
+    or eax, edx
+    mov [rtl8139_last_udp_src_port], ax
+    movzx eax, byte [esi + 36]
+    shl eax, 8
+    movzx edx, byte [esi + 37]
+    or eax, edx
+    mov [rtl8139_last_udp_dst_port], ax
+    movzx eax, byte [esi + 38]
+    shl eax, 8
+    movzx edx, byte [esi + 39]
+    or eax, edx
+    mov [rtl8139_last_udp_len], ax
+    inc dword [rtl8139_udp_rx_count]
 
 .advance:
     call rtl8139_rx_advance_current
@@ -3496,7 +3719,12 @@ rtl8139_rx_parse_current:
     cmp byte [esi + 14], 45h
     jne .done
     cmp byte [esi + 23], 01h
-    jne .done
+    je .icmp_ipv4
+    cmp byte [esi + 23], 11h
+    je .udp_ipv4
+    jmp .done
+
+.icmp_ipv4:
     cmp byte [esi + 35], 00h
     jne .done
     cmp byte [esi + 34], 00h
@@ -3534,6 +3762,56 @@ rtl8139_rx_parse_current:
     mov esi, rtl8139_icmp_ttl_msg
     call pm_print_string
     movzx eax, byte [rtl8139_last_icmp_ttl]
+    call pm_print_uint32
+    call pm_newline
+    jmp .done
+
+.udp_ipv4:
+    mov al, [esi + 26]
+    mov [rtl8139_last_udp_src_ip], al
+    mov al, [esi + 27]
+    mov [rtl8139_last_udp_src_ip + 1], al
+    mov al, [esi + 28]
+    mov [rtl8139_last_udp_src_ip + 2], al
+    mov al, [esi + 29]
+    mov [rtl8139_last_udp_src_ip + 3], al
+    movzx eax, byte [esi + 34]
+    shl eax, 8
+    movzx edx, byte [esi + 35]
+    or eax, edx
+    mov [rtl8139_last_udp_src_port], ax
+    movzx eax, byte [esi + 36]
+    shl eax, 8
+    movzx edx, byte [esi + 37]
+    or eax, edx
+    mov [rtl8139_last_udp_dst_port], ax
+    movzx eax, byte [esi + 38]
+    shl eax, 8
+    movzx edx, byte [esi + 39]
+    or eax, edx
+    mov [rtl8139_last_udp_len], ax
+
+    inc dword [rtl8139_udp_rx_count]
+    mov esi, rtl8139_udp_packet_msg
+    call pm_print_string
+    mov esi, rtl8139_udp_src_ip_msg
+    call pm_print_string
+    mov esi, rtl8139_last_udp_src_ip
+    call rtl8139_dump_ip
+    call pm_newline
+    mov esi, rtl8139_udp_src_port_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_last_udp_src_port]
+    call pm_print_uint32
+    call pm_newline
+    mov esi, rtl8139_udp_dst_port_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_last_udp_dst_port]
+    call pm_print_uint32
+    call pm_newline
+    mov esi, rtl8139_udp_len_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_last_udp_len]
     call pm_print_uint32
     call pm_newline
 

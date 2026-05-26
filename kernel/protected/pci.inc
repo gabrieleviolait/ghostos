@@ -5,6 +5,10 @@
 PCI_CONFIG_ADDR equ 0x0CF8
 PCI_CONFIG_DATA equ 0x0CFC
 PCI_ENABLE_BIT equ 0x80000000
+PCI_COMMAND_OFFSET equ 0x04
+PCI_CMD_IO_SPACE equ 0001h
+PCI_CMD_MEM_SPACE equ 0002h
+PCI_CMD_BUS_MASTER equ 0004h
 
 PCI_MAX_RECORDS equ 32
 PCI_RECORD_SIZE equ 20
@@ -72,6 +76,98 @@ pci_config_read16:
 .low_word:
     and eax, 0xFFFF
     pop ecx
+    ret
+
+; Inputs: BL=bus, BH=device, CH=function, CL=offset, EAX=dword.
+pci_config_write32:
+    push ebx
+    push ecx
+    push edx
+    push esi
+
+    mov esi, eax
+    xor eax, eax
+    mov al, bl
+    shl eax, 16
+
+    xor edx, edx
+    mov dl, bh
+    shl edx, 11
+    or eax, edx
+
+    xor edx, edx
+    mov dl, ch
+    shl edx, 8
+    or eax, edx
+
+    xor edx, edx
+    mov dl, cl
+    and dl, 0xFC
+    or eax, edx
+    or eax, PCI_ENABLE_BIT
+
+    mov dx, PCI_CONFIG_ADDR
+    out dx, eax
+    mov dx, PCI_CONFIG_DATA
+    mov eax, esi
+    out dx, eax
+
+    pop esi
+    pop edx
+    pop ecx
+    pop ebx
+    ret
+
+; Inputs match pci_config_read32, AX=word to write.
+pci_config_write16:
+    push ebx
+    push ecx
+    push edx
+    push esi
+
+    mov si, ax
+    call pci_config_read32
+    test cl, 2
+    jz .low_word
+
+    and eax, 0000FFFFh
+    movzx edx, si
+    shl edx, 16
+    or eax, edx
+    jmp .write
+
+.low_word:
+    and eax, 0FFFF0000h
+    movzx edx, si
+    or eax, edx
+
+.write:
+    call pci_config_write32
+    pop esi
+    pop edx
+    pop ecx
+    pop ebx
+    ret
+
+; Inputs: BL=bus, BH=device, CH=function.
+; Enables PCI I/O space and bus mastering, preserving Memory Space as-is.
+pci_enable_bus_master:
+    push eax
+    push ecx
+
+    mov cl, PCI_COMMAND_OFFSET
+    call pci_config_read16
+    mov [pci_command_before], ax
+    or ax, PCI_CMD_IO_SPACE | PCI_CMD_BUS_MASTER
+    mov [pci_command_after], ax
+    mov cl, PCI_COMMAND_OFFSET
+    call pci_config_write16
+    mov cl, PCI_COMMAND_OFFSET
+    call pci_config_read16
+    mov [pci_command_after], ax
+
+    pop ecx
+    pop eax
     ret
 
 ; Inputs match pci_config_read32. Returns AL=byte, zero-extended in EAX.
@@ -455,6 +551,15 @@ pm_pci_print_netdev:
     call pm_print_hex32
     call pm_newline
 
+    cmp byte [pm_pci_nic_type], PCI_NIC_RTL8139
+    jne .print_mac
+    mov bl, [edi+PCI_REC_BUS]
+    mov bh, [edi+PCI_REC_DEV]
+    mov ch, [edi+PCI_REC_FN]
+    call pci_enable_bus_master
+    call pm_pci_print_command_debug
+
+.print_mac:
     call pm_pci_print_mac_if_safe
     jmp .done
 
@@ -468,6 +573,8 @@ pm_pci_print_netdev:
 
 pm_pci_count dd 0
 pm_pci_seen dd 0
+pci_command_before dw 0
+pci_command_after dw 0
 pm_pci_nic_name dd 0
 pm_pci_io_base dw 0
 pm_pci_nic_type db 0
@@ -492,3 +599,47 @@ pm_pci_nic_generic_msg db 'Ethernet NIC',0
 pm_pci_nic_rtl8139_msg db 'RTL8139',0
 pm_pci_nic_ne2k_msg db 'NE2000-compatible',0
 pm_pci_nic_e1000_msg db 'Intel E1000',0
+
+pm_pci_print_command_debug:
+    mov esi, pm_pci_cmd_before_msg
+    call pm_print_string
+    movzx eax, word [pci_command_before]
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, pm_pci_cmd_after_msg
+    call pm_print_string
+    movzx eax, word [pci_command_after]
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, pm_pci_bus_master_msg
+    call pm_print_string
+    test word [pci_command_after], PCI_CMD_BUS_MASTER
+    jz .bm_no
+    mov esi, pm_pci_yes_msg
+    call pm_print_string
+    jmp .io
+.bm_no:
+    mov esi, pm_pci_no_msg
+    call pm_print_string
+
+.io:
+    mov esi, pm_pci_io_space_msg
+    call pm_print_string
+    test word [pci_command_after], PCI_CMD_IO_SPACE
+    jz .io_no
+    mov esi, pm_pci_yes_msg
+    call pm_print_string
+    ret
+.io_no:
+    mov esi, pm_pci_no_msg
+    call pm_print_string
+    ret
+
+pm_pci_cmd_before_msg db 'PCI CMD before: ',0
+pm_pci_cmd_after_msg db 'PCI CMD after: ',0
+pm_pci_bus_master_msg db 'bus_master: ',0
+pm_pci_io_space_msg db 'io_space: ',0
+pm_pci_yes_msg db 'yes',13,0
+pm_pci_no_msg db 'no',13,0

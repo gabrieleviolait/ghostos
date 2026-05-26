@@ -165,7 +165,19 @@ shell32_loop:
 
     mov edi, pm_cmd_ping
     call pm_starts_with_word
-    jc pm_do_pinggw
+    jc pm_do_ping
+
+    mov edi, pm_cmd_pingtest
+    call pm_starts_with_word
+    jc pm_do_pingtest
+
+    mov edi, pm_cmd_pingdebug
+    call pm_starts_with_word
+    jc pm_do_pingdebug
+
+    mov edi, pm_cmd_pingtxdebug
+    call pm_starts_with_word
+    jc pm_do_pingtxdebug
 
     mov edi, pm_cmd_pingfake
     call pm_starts_with_word
@@ -222,6 +234,10 @@ shell32_loop:
     mov edi, pm_cmd_rxpacket
     call pm_starts_with_word
     jc pm_do_rxpacket
+
+    mov edi, pm_cmd_rxipv4dump
+    call pm_starts_with_word
+    jc pm_do_rxipv4dump
 
     mov edi, pm_cmd_rxkick
     call pm_starts_with_word
@@ -443,6 +459,22 @@ pm_do_pinggw:
     call rtl8139_pinggw
     jmp shell32_loop
 
+pm_do_ping:
+    call rtl8139_ping_cmd
+    jmp shell32_loop
+
+pm_do_pingtest:
+    call rtl8139_pingtest
+    jmp shell32_loop
+
+pm_do_pingdebug:
+    call rtl8139_pingdebug
+    jmp shell32_loop
+
+pm_do_pingtxdebug:
+    call rtl8139_pingtxdebug
+    jmp shell32_loop
+
 pm_do_pingfake:
     call rtl8139_pingfake
     jmp shell32_loop
@@ -497,6 +529,10 @@ pm_do_rxpeek:
 
 pm_do_rxpacket:
     call rtl8139_rxpacket
+    jmp shell32_loop
+
+pm_do_rxipv4dump:
+    call rtl8139_rxipv4dump
     jmp shell32_loop
 
 pm_do_rxkick:
@@ -667,8 +703,8 @@ pm_help_msg db \
 'lspci netdev netup netstat netdiag netbar',13,\
 'mac setmac randommac',13,\
 'txdemo txdump pktdump pktinfo txstatus',13,\
-'pinggw ping pingfake arp arpfake arpstat txreal',13,\
-'rxdump netreset netclear rxpoll rxpeek rxpacket rxkick rxdebug rxreset rxmode rxtest rxstatus',13,\
+'pinggw ping pingtest pingdebug pingtxdebug pingfake arp arpfake arpstat txreal',13,\
+'rxdump netreset netclear rxpoll rxpeek rxpacket rxipv4dump rxkick rxdebug rxreset rxmode rxtest rxstatus',13,\
 'regs stack uptime panic',13,\
 'tasks yield',13,\
 'ls cat browse run halt',13,0
@@ -724,6 +760,9 @@ pm_cmd_setmac db 'setmac',0
 pm_cmd_randommac db 'randommac',0
 pm_cmd_pinggw db 'pinggw',0
 pm_cmd_ping db 'ping',0
+pm_cmd_pingtest db 'pingtest',0
+pm_cmd_pingdebug db 'pingdebug',0
+pm_cmd_pingtxdebug db 'pingtxdebug',0
 pm_cmd_pingfake db 'pingfake',0
 pm_cmd_arpfake db 'arpfake',0
 pm_cmd_arp db 'arp',0
@@ -738,6 +777,7 @@ pm_cmd_rxdump db 'rxdump',0
 pm_cmd_rxpoll db 'rxpoll',0
 pm_cmd_rxpeek db 'rxpeek',0
 pm_cmd_rxpacket db 'rxpacket',0
+pm_cmd_rxipv4dump db 'rxipv4dump',0
 pm_cmd_rxkick db 'rxkick',0
 pm_cmd_rxdebug db 'rxdebug',0
 pm_cmd_rxreset db 'rxreset',0

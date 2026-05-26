@@ -18,8 +18,8 @@ RTL8139_CONFIG4   equ 0x5A
 RTL8139_MULINT    equ 0x5C
 RTL8139_CONFIG5   equ 0xD8
 RTL8139_CR_BUFE   equ 00000001b
-RTL8139_CR_TE     equ 00001000b
-RTL8139_CR_RE     equ 00000100b
+RTL8139_CR_TE     equ 00000100b
+RTL8139_CR_RE     equ 00001000b
 RTL8139_CR_RST    equ 00010000b
 RTL8139_RCR_AAP   equ 00000001h
 RTL8139_RCR_APM   equ 00000002h
@@ -58,6 +58,8 @@ rtl8139_tx_count dd 0
 rtl8139_rx_count dd 0
 rtl8139_error_count dd 0
 rtl8139_tx_len dd 0
+rtl8139_tx_slot db 0
+rtl8139_last_tx_slot db 0
 rtl8139_rxtest_first_before dd 0
 rtl8139_rxtest_first_after dd 0
 rtl8139_rxtest_cbr_before dw 0
@@ -65,9 +67,17 @@ rtl8139_rxtest_cbr_after dw 0
 rtl8139_rxtest_isr_before dw 0
 rtl8139_rxtest_isr_after dw 0
 rtl8139_rxtest_tsd0 dd 0
+rtl8139_cr_before_rcr db 0
+rtl8139_rcr_after_write dd 0
 rtl8139_io_base dw 0C000h
 rtl8139_bar_raw dd 0
 rtl8139_bar_index db 0
+rtl8139_pci_bus db 0
+rtl8139_pci_dev db 0
+rtl8139_pci_fn db 0
+rtl8139_pci_bdf_valid db 0
+rtl8139_pci_cmd_before dw 0
+rtl8139_pci_cmd_after dw 0
 rtl8139_rx_offset dd 0
 rtl8139_last_cbr dw 0
 rtl8139_capr_snapshot dw 0
@@ -83,6 +93,14 @@ rtl8139_gateway_mac:
 times 6 db 0
 rtl8139_arp_reply_count dd 0
 rtl8139_icmp_reply_count dd 0
+rtl8139_ping_seq dw 1
+rtl8139_last_icmp_seq dw 0
+rtl8139_last_icmp_ttl db 0
+rtl8139_last_icmp_src_ip db 0,0,0,0
+rtl8139_pingtest_tsd dd 0
+rtl8139_pingtest_isr dw 0
+rtl8139_arp_wait_first dd 0
+rtl8139_arp_wait_cbr dw 0
 rtl8139_local_ip db 10,0,2,15
 rtl8139_gateway_ip db 10,0,2,2
 
@@ -112,6 +130,7 @@ rtl8139_netbar:
     movzx eax, word [rtl8139_io_base]
     call pm_print_hex32
     call pm_newline
+    call rtl8139_print_pci_cmd_debug
     ret
 
 rtl8139_bar0_raw_msg db 'BAR0 raw: ',0
@@ -257,6 +276,7 @@ rtl8139_netreset:
     mov dword [rtl8139_rx_count], 0
     mov dword [rtl8139_error_count], 0
     mov dword [rtl8139_rx_offset], 0
+    mov byte [rtl8139_tx_slot], 0
     mov word [rtl8139_last_cbr], 0
     mov dword [rtl8139_arp_reply_count], 0
     mov dword [rtl8139_icmp_reply_count], 0
@@ -464,16 +484,62 @@ rtl8139_pingfake:
     call rtl8139_pinggw
     ret
 
+rtl8139_ping_cmd:
+    mov esi, pm_cmd_buffer
+    call pm_skip_first_word
+    call pm_skip_spaces
+    cmp byte [esi], 0
+    je rtl8139_pinggw
+
+    mov edi, rtl8139_gateway_ip_text
+    call pm_starts_with_word
+    jc rtl8139_pinggw
+
+    mov esi, rtl8139_ping_usage_msg
+    call pm_print_string
+    ret
+
 rtl8139_pinggw:
     cmp byte [rtl8139_initialized], 1
     jne .not_ready
 
+    call rtl8139_ensure_gateway_mac
+    cmp byte [rtl8139_gateway_mac_known], 1
+    jne .no_arp
+
+    call rtl8139_build_icmp_echo_request
+    call rtl8139_dump_icmp_tx_packet
+    call rtl8139_icmp_tx_submit_current
+
+    mov esi, rtl8139_ping_sent_msg
+    call pm_print_string
+    call rtl8139_rxpoll
+    call rtl8139_rxpacket
+    ret
+
+.no_arp:
+    inc dword [rtl8139_error_count]
+    mov esi, rtl8139_ping_no_arp_msg
+    call pm_print_string
+    ret
+
+.not_ready:
+    inc dword [rtl8139_error_count]
+    mov esi, rtl8139_not_ready_msg
+    call pm_print_string
+    ret
+
+rtl8139_build_icmp_echo_request:
+    pushad
+
+    mov edi, rtl8139_tx_buffer
+    mov ecx, 2048
+    xor eax, eax
+    rep stosb
+
     mov edi, rtl8139_tx_buffer
 
-    ; Ethernet DEST: learned gateway MAC, or broadcast until ARP succeeds.
-    cmp byte [rtl8139_gateway_mac_known], 1
-    jne .broadcast_dst
-
+    ; Ethernet destination: learned gateway MAC.
     mov esi, rtl8139_gateway_mac
     mov ecx, 6
 
@@ -481,16 +547,8 @@ rtl8139_pinggw:
     lodsb
     stosb
     loop .copy_dst
-    jmp .dst_done
 
-.broadcast_dst:
-    mov ecx, 6
-    mov al, 0FFh
-    rep stosb
-
-.dst_done:
-
-    ; Ethernet SRC rtl8139_mac
+    ; Ethernet source.
     mov esi, rtl8139_mac
     mov ecx, 6
     
@@ -505,33 +563,32 @@ rtl8139_pinggw:
     mov al, 00h
     stosb
 
-    ; Minimal fake IPv4 header
-    mov al, 45h        ; version/IHL
-    stosb
-    mov al, 00h        ; DSCP
-    stosb
-    mov al, 00h        ; total length high
-    stosb
-    mov al, 1Ch        ; total length low = 28
-    stosb
-    mov al, 00h        ; ID
-    stosb
-    mov al, 01h
-    stosb
-    mov al, 00h        ; flags/fragment
+    ; IPv4 header.
+    mov al, 45h
     stosb
     mov al, 00h
     stosb
-    mov al, 40h        ; TTL
+    mov al, 00h
     stosb
-    mov al, 01h        ; ICMP
+    mov al, 24h        ; total length = 20 + 8 + 8
     stosb
-    mov al, 00h        ; checksum placeholder
+    mov al, 00h
+    stosb
+    mov al, 01h        ; identification
+    stosb
+    mov al, 00h
+    stosb
+    mov al, 00h
+    stosb
+    mov al, 40h
+    stosb
+    mov al, 01h
+    stosb
+    mov al, 00h
     stosb
     mov al, 00h
     stosb
 
-    ; SRC IP 10.0.2.15
     mov esi, rtl8139_local_ip
     mov ecx, 4
 .copy_src_ip:
@@ -539,7 +596,6 @@ rtl8139_pinggw:
     stosb
     loop .copy_src_ip
 
-    ; DST IP 10.0.2.2
     mov esi, rtl8139_gateway_ip
     mov ecx, 4
 .copy_dst_ip:
@@ -560,10 +616,21 @@ rtl8139_pinggw:
     stosb
     mov al, 34h
     stosb
-    mov al, 00h        ; sequence
+    mov ax, [rtl8139_ping_seq]
+    mov [rtl8139_last_icmp_seq], ax
+    mov bl, ah
+    mov bh, al
+    mov al, bl
     stosb
-    mov al, 01h
+    mov al, bh
     stosb
+
+    mov esi, rtl8139_icmp_payload
+    mov ecx, rtl8139_icmp_payload_len
+.copy_payload:
+    lodsb
+    stosb
+    loop .copy_payload
 
     mov esi, rtl8139_tx_buffer + 14
     mov ecx, 20
@@ -572,14 +639,213 @@ rtl8139_pinggw:
     mov [rtl8139_tx_buffer + 25], al
 
     mov esi, rtl8139_tx_buffer + 34
-    mov ecx, 8
+    mov ecx, 8 + rtl8139_icmp_payload_len
     call rtl8139_checksum
     mov [rtl8139_tx_buffer + 36], ah
     mov [rtl8139_tx_buffer + 37], al
 
-    mov dword [rtl8139_tx_len], 42
+    inc word [rtl8139_ping_seq]
+    mov dword [rtl8139_tx_len], 60
 
-    mov esi, rtl8139_pingfake_msg
+    popad
+    ret
+
+rtl8139_ensure_gateway_mac:
+    cmp byte [rtl8139_gateway_mac_known], 1
+    je .done
+
+    call rtl8139_build_arp_request
+    call rtl8139_tx_submit_current
+
+    mov ecx, 4
+.process:
+    push ecx
+    call rtl8139_wait_for_rx_activity
+    call rtl8139_rx_process_packet
+    pop ecx
+    cmp byte [rtl8139_gateway_mac_known], 1
+    je .done
+    loop .process
+.done:
+    ret
+
+rtl8139_wait_for_rx_activity:
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CR
+    in al, dx
+    test al, RTL8139_CR_BUFE
+    jz .done
+
+    mov eax, [rtl8139_rx_buffer]
+    mov [rtl8139_arp_wait_first], eax
+
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CBR
+    in ax, dx
+    mov [rtl8139_arp_wait_cbr], ax
+
+    mov ecx, 30000
+.loop:
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_ISR
+    in ax, dx
+    test ax, RTL8139_ISR_ROK
+    jnz .done
+
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CBR
+    in ax, dx
+    cmp ax, [rtl8139_arp_wait_cbr]
+    jne .done
+
+    mov eax, [rtl8139_rx_buffer]
+    cmp eax, [rtl8139_arp_wait_first]
+    jne .done
+    loop .loop
+
+.done:
+    ret
+
+rtl8139_pingtest:
+    cmp byte [rtl8139_initialized], 1
+    je .ready
+
+    call rtl8139_rxtest_quiet_netup
+    cmp byte [rtl8139_initialized], 1
+    jne .not_ready
+
+.ready:
+    call rtl8139_enable_pci_bus_master
+    mov dword [rtl8139_pingtest_tsd], 0
+    mov word [rtl8139_pingtest_isr], 0
+    mov dword [rtl8139_icmp_reply_count], 0
+    mov word [rtl8139_last_icmp_seq], 0
+    mov byte [rtl8139_last_icmp_ttl], 0
+    mov dword [rtl8139_last_icmp_src_ip], 0
+
+    call rtl8139_ensure_gateway_mac
+    cmp byte [rtl8139_gateway_mac_known], 1
+    jne .arp_failed
+
+    mov esi, rtl8139_pingtest_arp_msg
+    call pm_print_string
+    mov esi, rtl8139_known_msg
+    call pm_print_string
+
+    call rtl8139_build_icmp_echo_request
+    call rtl8139_dump_icmp_tx_packet
+    call rtl8139_icmp_tx_submit_current
+
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_TSD0
+    in eax, dx
+    mov [rtl8139_pingtest_tsd], eax
+
+    mov ecx, 80
+.poll:
+    push ecx
+    call rtl8139_wait_for_rx_activity
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_ISR
+    in ax, dx
+    or [rtl8139_pingtest_isr], ax
+    call rtl8139_rxpoll
+    call rtl8139_rxpacket
+    pop ecx
+    cmp dword [rtl8139_icmp_reply_count], 0
+    jne .summary
+    loop .poll
+
+.summary:
+    call rtl8139_pingtest_summary
+    ret
+
+.arp_failed:
+    mov esi, rtl8139_pingtest_arp_failed_msg
+    call pm_print_string
+    jmp .summary
+
+.not_ready:
+    inc dword [rtl8139_error_count]
+    mov esi, rtl8139_not_ready_msg
+    call pm_print_string
+    ret
+
+rtl8139_pingtest_summary:
+    mov esi, rtl8139_pingtest_summary_msg
+    call pm_print_string
+
+    mov esi, rtl8139_rxtest_tok_msg
+    call pm_print_string
+    mov ebx, [rtl8139_pingtest_tsd]
+    test ebx, RTL8139_TSD_TOK
+    jz .tok_no
+    call rtl8139_print_yes
+    jmp .rok
+.tok_no:
+    call rtl8139_print_no
+
+.rok:
+    mov esi, rtl8139_rxtest_rok_msg
+    call pm_print_string
+    mov bx, [rtl8139_pingtest_isr]
+    test bx, RTL8139_ISR_ROK
+    jz .rok_no
+    call rtl8139_print_yes
+    jmp .arp
+.rok_no:
+    call rtl8139_print_no
+
+.arp:
+    mov esi, rtl8139_pingtest_arp_msg
+    call pm_print_string
+    cmp byte [rtl8139_gateway_mac_known], 1
+    jne .arp_unknown
+    mov esi, rtl8139_known_msg
+    call pm_print_string
+    jmp .icmp
+.arp_unknown:
+    mov esi, rtl8139_unknown_word_msg
+    call pm_print_string
+
+.icmp:
+    mov esi, rtl8139_pingtest_icmp_msg
+    call pm_print_string
+    cmp dword [rtl8139_icmp_reply_count], 0
+    je .icmp_no
+    call rtl8139_print_yes
+    jmp .src
+.icmp_no:
+    call rtl8139_print_no
+
+.src:
+    mov esi, rtl8139_pingtest_src_msg
+    call pm_print_string
+    mov esi, rtl8139_last_icmp_src_ip
+    call rtl8139_dump_ip
+    call pm_newline
+
+    mov esi, rtl8139_pingtest_seq_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_last_icmp_seq]
+    call pm_print_uint32
+    call pm_newline
+    ret
+
+rtl8139_pingtxdebug:
+    cmp byte [rtl8139_initialized], 1
+    jne .not_ready
+
+    cmp byte [rtl8139_gateway_mac_known], 1
+    jne .no_arp
+
+    call rtl8139_build_icmp_echo_request
+    call rtl8139_dump_icmp_tx_packet
+    call rtl8139_icmp_tx_submit_current
+    ret
+
+.no_arp:
+    mov esi, rtl8139_ping_no_arp_msg
     call pm_print_string
     ret
 
@@ -589,9 +855,224 @@ rtl8139_pinggw:
     call pm_print_string
     ret
 
-rtl8139_pingfake_msg db 'ICMP echo request for gateway built',13,0
+rtl8139_pingdebug:
+    cmp byte [rtl8139_initialized], 1
+    je .ready
+
+    call rtl8139_rxtest_quiet_netup
+    cmp byte [rtl8139_initialized], 1
+    jne .not_ready
+
+.ready:
+    call rtl8139_enable_pci_bus_master
+    call rtl8139_ensure_gateway_mac
+    cmp byte [rtl8139_gateway_mac_known], 1
+    jne .arp_failed
+
+    call rtl8139_build_icmp_echo_request
+    call rtl8139_dump_icmp_tx_packet
+    ret
+
+.arp_failed:
+    mov esi, rtl8139_pingtest_arp_failed_msg
+    call pm_print_string
+    ret
+
+.not_ready:
+    inc dword [rtl8139_error_count]
+    mov esi, rtl8139_not_ready_msg
+    call pm_print_string
+    ret
+
+rtl8139_dump_icmp_tx_packet:
+    pushad
+
+    mov esi, rtl8139_pingdebug_msg
+    call pm_print_string
+
+    mov esi, rtl8139_pingdebug_ethertype_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_tx_buffer + 12]
+    shl eax, 8
+    movzx ebx, byte [rtl8139_tx_buffer + 13]
+    or eax, ebx
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_pingdebug_ipv4_len_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_tx_buffer + 16]
+    shl eax, 8
+    movzx ebx, byte [rtl8139_tx_buffer + 17]
+    or eax, ebx
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_pingdebug_ipv4_id_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_tx_buffer + 18]
+    shl eax, 8
+    movzx ebx, byte [rtl8139_tx_buffer + 19]
+    or eax, ebx
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_pingdebug_ipv4_frag_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_tx_buffer + 20]
+    shl eax, 8
+    movzx ebx, byte [rtl8139_tx_buffer + 21]
+    or eax, ebx
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_pingdebug_ipv4_ttl_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_tx_buffer + 22]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_pingdebug_ipv4_proto_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_tx_buffer + 23]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_pingdebug_ipv4_checksum_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_tx_buffer + 24]
+    shl eax, 8
+    movzx ebx, byte [rtl8139_tx_buffer + 25]
+    or eax, ebx
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_pingdebug_ipv4_raw_sum_msg
+    call pm_print_string
+    mov esi, rtl8139_tx_buffer + 14
+    mov ecx, 20
+    call rtl8139_checksum_raw_sum
+    movzx eax, ax
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_pingdebug_ipv4_header_msg
+    call pm_print_string
+    mov esi, rtl8139_tx_buffer + 14
+    mov ecx, 20
+    call rtl8139_dump_bytes
+
+    mov esi, rtl8139_pingdebug_icmp_checksum_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_tx_buffer + 36]
+    shl eax, 8
+    movzx ebx, byte [rtl8139_tx_buffer + 37]
+    or eax, ebx
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_pingdebug_icmp_raw_sum_msg
+    call pm_print_string
+    mov esi, rtl8139_tx_buffer + 34
+    mov ecx, 8 + rtl8139_icmp_payload_len
+    call rtl8139_checksum_raw_sum
+    movzx eax, ax
+    call pm_print_hex32
+    call pm_newline
+
+    mov esi, rtl8139_pingdebug_src_msg
+    call pm_print_string
+    mov esi, rtl8139_tx_buffer + 26
+    call rtl8139_dump_ip
+    call pm_newline
+
+    mov esi, rtl8139_pingdebug_dst_msg
+    call pm_print_string
+    mov esi, rtl8139_tx_buffer + 30
+    call rtl8139_dump_ip
+    call pm_newline
+
+    mov esi, rtl8139_pingdebug_icmp_type_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_tx_buffer + 34]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_pingdebug_icmp_seq_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_tx_buffer + 40]
+    shl eax, 8
+    movzx ebx, byte [rtl8139_tx_buffer + 41]
+    or eax, ebx
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_pingdebug_icmp_total_len_msg
+    call pm_print_string
+    mov eax, 8 + rtl8139_icmp_payload_len
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_pingdebug_payload_len_msg
+    call pm_print_string
+    mov eax, rtl8139_icmp_payload_len
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_pingdebug_payload_bytes_msg
+    call pm_print_string
+    mov esi, rtl8139_tx_buffer + 42
+    mov ecx, rtl8139_icmp_payload_len
+    call rtl8139_dump_bytes
+
+    popad
+    ret
+
+rtl8139_icmp_tx_submit_current:
+    mov esi, rtl8139_icmp_tx_submit_msg
+    call pm_print_string
+    call rtl8139_tx_submit_current
+    ret
+
+rtl8139_gateway_ip_text db '10.0.2.2',0
+rtl8139_icmp_payload db 'GHOSTOS!'
+rtl8139_icmp_payload_len equ $ - rtl8139_icmp_payload
+rtl8139_ping_usage_msg db 'Usage: ping 10.0.2.2',13,0
+rtl8139_ping_sent_msg db 'ICMP echo request sent',13,0
+rtl8139_ping_no_arp_msg db 'Ping failed: gateway MAC unknown',13,0
+rtl8139_pingtest_summary_msg db 'PINGTEST SUMMARY',13,0
+rtl8139_pingtest_arp_msg db 'ARP: ',0
+rtl8139_pingtest_arp_failed_msg db 'ARP failed',13,0
+rtl8139_pingtest_icmp_msg db 'ICMP reply: ',0
+rtl8139_pingtest_src_msg db 'src IP: ',0
+rtl8139_pingtest_seq_msg db 'seq: ',0
+rtl8139_pingdebug_msg db 'PINGDEBUG TX IPv4/ICMP',13,0
+rtl8139_pingdebug_ethertype_msg db 'ethertype: ',0
+rtl8139_pingdebug_ipv4_len_msg db 'IPv4 len: ',0
+rtl8139_pingdebug_ipv4_id_msg db 'IPv4 id: ',0
+rtl8139_pingdebug_ipv4_frag_msg db 'IPv4 flags/frag: ',0
+rtl8139_pingdebug_ipv4_ttl_msg db 'IPv4 ttl: ',0
+rtl8139_pingdebug_ipv4_proto_msg db 'IPv4 protocol: ',0
+rtl8139_pingdebug_ipv4_checksum_msg db 'IPv4 checksum: ',0
+rtl8139_pingdebug_ipv4_raw_sum_msg db 'IPv4 raw sum: ',0
+rtl8139_pingdebug_ipv4_header_msg db 'IPv4 header bytes:',13,0
+rtl8139_pingdebug_icmp_checksum_msg db 'ICMP checksum: ',0
+rtl8139_pingdebug_icmp_raw_sum_msg db 'ICMP raw sum: ',0
+rtl8139_pingdebug_src_msg db 'src IP: ',0
+rtl8139_pingdebug_dst_msg db 'dst IP: ',0
+rtl8139_pingdebug_icmp_type_msg db 'ICMP type: ',0
+rtl8139_pingdebug_icmp_seq_msg db 'ICMP seq: ',0
+rtl8139_pingdebug_icmp_total_len_msg db 'ICMP total len: ',0
+rtl8139_pingdebug_payload_len_msg db 'payload len: ',0
+rtl8139_pingdebug_payload_bytes_msg db 'ICMP payload bytes:',13,0
+rtl8139_icmp_tx_submit_msg db 'ICMP TX submit',13,0
 
 rtl8139_checksum:
+    call rtl8139_checksum_raw_sum
+    not ax
+    ret
+
+rtl8139_checksum_raw_sum:
     push ebx
     push ecx
     push edx
@@ -622,15 +1103,14 @@ rtl8139_checksum:
     add edx, eax
 
 .fold:
+.fold_loop:
     mov eax, edx
     shr eax, 16
     and edx, 0FFFFh
     add edx, eax
-    mov eax, edx
-    shr eax, 16
-    add dx, ax
-    not dx
     mov ax, dx
+    cmp edx, 0FFFFh
+    ja .fold_loop
 
     pop esi
     pop edx
@@ -1017,6 +1497,16 @@ rtl8139_txreal:
     ret
 
 rtl8139_tx_submit_current:
+    mov al, [rtl8139_tx_slot]
+    and al, 03h
+    mov [rtl8139_last_tx_slot], al
+
+    mov esi, rtl8139_tx_slot_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_last_tx_slot]
+    call pm_print_uint32
+    call pm_newline
+
     mov esi, rtl8139_tx_len_msg
     call pm_print_string
     mov eax, [rtl8139_tx_len]
@@ -1031,26 +1521,38 @@ rtl8139_tx_submit_current:
 
     mov esi, rtl8139_tsd_before_msg
     call pm_print_string
+    movzx bx, byte [rtl8139_last_tx_slot]
+    shl bx, 2
     mov dx, [rtl8139_io_base]
     add dx, RTL8139_TSD0
+    add dx, bx
     in eax, dx
     call pm_print_hex32
     call pm_newline
 
-    ; TSAD0 = physical address of TX buffer
+    ; TSADn = physical address of TX buffer
+    movzx bx, byte [rtl8139_last_tx_slot]
+    shl bx, 2
     mov dx, [rtl8139_io_base]
     add dx, RTL8139_TSAD0
+    add dx, bx
     mov eax, rtl8139_tx_buffer
     out dx, eax
 
-    ; TSD0 = packet length
+    ; TSDn = packet length
+    movzx bx, byte [rtl8139_last_tx_slot]
+    shl bx, 2
     mov dx, [rtl8139_io_base]
     add dx, RTL8139_TSD0
+    add dx, bx
     mov eax, [rtl8139_tx_len]
     out dx, eax
 
+    movzx bx, byte [rtl8139_last_tx_slot]
+    shl bx, 2
     mov dx, [rtl8139_io_base]
     add dx, RTL8139_TSD0
+    add dx, bx
     mov ecx, 100000
 
 .wait_tx:
@@ -1068,6 +1570,8 @@ rtl8139_tx_submit_current:
     call pm_newline
     call rtl8139_print_tsd_flags
 
+    inc byte [rtl8139_tx_slot]
+    and byte [rtl8139_tx_slot], 03h
     inc dword [rtl8139_tx_count]
     ret
 
@@ -1143,10 +1647,11 @@ rtl8139_print_tsd_flags:
     ret
 
 rtl8139_txreal_sent_msg db 'RTL8139 TX submitted to hardware',13,0
+rtl8139_tx_slot_msg db 'TX slot: ',0
 rtl8139_tx_len_msg db 'TX len: ',0
 rtl8139_tx_buffer_msg db 'TX buffer: ',0
-rtl8139_tsd_before_msg db 'TSD0 before: ',0
-rtl8139_tsd_after_msg db 'TSD0 after: ',0
+rtl8139_tsd_before_msg db 'TSD before: ',0
+rtl8139_tsd_after_msg db 'TSD after: ',0
 rtl8139_tsd_tok_msg db 'TOK',13,0
 rtl8139_tsd_tabt_msg db 'TABT',13,0
 rtl8139_tsd_tun_msg db 'TUN',13,0
@@ -1174,6 +1679,8 @@ rtl8139_rx_init:
     mov byte [rtl8139_rx_ready], 0
     mov dword [rtl8139_rx_offset], 0
     mov dword [rtl8139_rx_first_dword], 0
+    mov byte [rtl8139_rx_capr_mode], 1
+    mov byte [rtl8139_tx_slot], 0
 
     mov dx, [rtl8139_io_base]
     add dx, RTL8139_CR
@@ -1241,6 +1748,44 @@ rtl8139_write_initial_capr:
     out dx, ax
     ret
 
+rtl8139_save_pci_bdf:
+    mov al, [edi+PCI_REC_BUS]
+    mov [rtl8139_pci_bus], al
+    mov al, [edi+PCI_REC_DEV]
+    mov [rtl8139_pci_dev], al
+    mov al, [edi+PCI_REC_FN]
+    mov [rtl8139_pci_fn], al
+    mov byte [rtl8139_pci_bdf_valid], 1
+    ret
+
+rtl8139_enable_pci_bus_master:
+    cmp byte [rtl8139_pci_bdf_valid], 1
+    jne .done
+    mov bl, [rtl8139_pci_bus]
+    mov bh, [rtl8139_pci_dev]
+    mov ch, [rtl8139_pci_fn]
+    call pci_enable_bus_master
+    mov ax, [pci_command_before]
+    mov [rtl8139_pci_cmd_before], ax
+    mov ax, [pci_command_after]
+    mov [rtl8139_pci_cmd_after], ax
+.done:
+    ret
+
+rtl8139_print_pci_cmd_debug:
+    cmp byte [rtl8139_pci_bdf_valid], 1
+    jne .unknown
+    mov ax, [rtl8139_pci_cmd_before]
+    mov [pci_command_before], ax
+    mov ax, [rtl8139_pci_cmd_after]
+    mov [pci_command_after], ax
+    call pm_pci_print_command_debug
+    ret
+.unknown:
+    mov esi, rtl8139_pci_cmd_unknown_msg
+    call pm_print_string
+    ret
+
 rtl8139_configure_rx_path:
     call rtl8139_wake
 
@@ -1259,11 +1804,21 @@ rtl8139_configure_rx_path:
     in ax, dx
     mov [rtl8139_last_cbr], ax
 
-    ; Accept all relevant Ethernet traffic and wrap the ring.
+    ; Linux/Minix program RCR/TCR after RX/TX are enabled.
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CR
+    mov al, RTL8139_CR_RE | RTL8139_CR_TE
+    out dx, al
+    in al, dx
+    mov [rtl8139_cr_before_rcr], al
+
+    ; Accept all relevant Ethernet traffic.
     mov dx, [rtl8139_io_base]
     add dx, RTL8139_RCR
     mov eax, [rtl8139_rcr_value]
     out dx, eax
+    in eax, dx
+    mov [rtl8139_rcr_after_write], eax
 
     ; Conservative TX config: IFG normal, DMA burst enabled.
     mov dx, [rtl8139_io_base]
@@ -1282,12 +1837,6 @@ rtl8139_configure_rx_path:
     add dx, RTL8139_ISR
     mov ax, 0FFFFh
     out dx, ax
-
-    ; Enable RX + TX.
-    mov dx, [rtl8139_io_base]
-    add dx, RTL8139_CR
-    mov al, RTL8139_CR_RE | RTL8139_CR_TE
-    out dx, al
     ret
 
 rtl8139_netup_debug:
@@ -1729,6 +2278,8 @@ rtl8139_rxstatus:
     call pm_print_hex32
     call pm_newline
 
+    call rtl8139_print_pci_cmd_debug
+
     ret
 
 rtl8139_rxstatus_cr_msg db 'CR: ',0
@@ -1746,7 +2297,7 @@ rtl8139_rxkick:
 
     mov dx, [rtl8139_io_base]
     add dx, RTL8139_CAPR
-    xor ax, ax
+    mov ax, 0FFF0h
     out dx, ax
 
     mov dx, [rtl8139_io_base]
@@ -1805,15 +2356,15 @@ rtl8139_rxreset:
 
     mov edi, rtl8139_arg_8000
     call pm_starts_with_word
-    jc .set_8000
+    jc .experimental
 
     mov edi, rtl8139_arg_10000
     call pm_starts_with_word
-    jc .set_10000
+    jc .experimental
 
     mov edi, rtl8139_arg_20000
     call pm_starts_with_word
-    jc .set_20000
+    jc .experimental
 
     mov edi, rtl8139_arg_real
     call pm_starts_with_word
@@ -1831,17 +2382,10 @@ rtl8139_rxreset:
     mov byte [rtl8139_rx_capr_mode], 1
     jmp .apply
 
-.set_8000:
-    mov dword [rtl8139_rx_rbstart_override], 00008000h
-    jmp .apply
-
-.set_10000:
-    mov dword [rtl8139_rx_rbstart_override], 00010000h
-    jmp .apply
-
-.set_20000:
-    mov dword [rtl8139_rx_rbstart_override], 00020000h
-    jmp .apply
+.experimental:
+    mov esi, rtl8139_rxreset_experimental_msg
+    call pm_print_string
+    ret
 
 .set_real:
     mov dword [rtl8139_rx_rbstart_override], 0
@@ -1864,7 +2408,8 @@ rtl8139_arg_10000 db '10000',0
 rtl8139_arg_20000 db '20000',0
 rtl8139_arg_real db 'real',0
 rtl8139_rxreset_msg db 'RTL8139 RX reset',13,0
-rtl8139_rxreset_usage_msg db 'Usage: rxreset [capr0|caprf0|8000|10000|20000|real]',13,0
+rtl8139_rxreset_usage_msg db 'Usage: rxreset [capr0|caprf0|real] (8000/10000/20000 experimental disabled)',13,0
+rtl8139_rxreset_experimental_msg db 'Experimental RBSTART override disabled; use rxreset real.',13,0
 
 rtl8139_rxmode:
     mov esi, pm_cmd_buffer
@@ -1940,6 +2485,8 @@ rtl8139_rxtest:
     mov word [rtl8139_rxtest_isr_before], 0
     mov word [rtl8139_rxtest_isr_after], 0
     mov dword [rtl8139_rxtest_tsd0], 0
+    mov byte [rtl8139_cr_before_rcr], 0
+    mov dword [rtl8139_rcr_after_write], 0
 
     call rtl8139_rxtest_quiet_netup
     cmp byte [rtl8139_initialized], 1
@@ -2106,6 +2653,8 @@ rtl8139_bind_pci_io_quiet:
     jmp .loop
 
 .bound:
+    call rtl8139_save_pci_bdf
+    call rtl8139_enable_pci_bus_master
     mov byte [pm_pci_nic_type], PCI_NIC_RTL8139
     ret
 
@@ -2113,6 +2662,7 @@ rtl8139_bind_pci_io_quiet:
     mov word [rtl8139_io_base], 0C000h
     mov dword [rtl8139_bar_raw], 0
     mov byte [rtl8139_bar_index], 0
+    mov byte [rtl8139_pci_bdf_valid], 0
     ret
 
 rtl8139_rxtest_tx_submit_silent:
@@ -2254,13 +2804,19 @@ rtl8139_rxtest_summary:
     call pm_print_hex32
     call pm_newline
 
-    mov esi, rtl8139_rxstatus_rcr_msg
+    mov esi, rtl8139_rxtest_cr_before_rcr_msg
     call pm_print_string
-    mov dx, [rtl8139_io_base]
-    add dx, RTL8139_RCR
-    in eax, dx
+    movzx eax, byte [rtl8139_cr_before_rcr]
     call pm_print_hex32
     call pm_newline
+
+    mov esi, rtl8139_rxtest_rcr_after_write_msg
+    call pm_print_string
+    mov eax, [rtl8139_rcr_after_write]
+    call pm_print_hex32
+    call pm_newline
+
+    call rtl8139_print_pci_cmd_debug
 
     mov esi, rtl8139_tcr_msg
     call pm_print_string
@@ -2362,6 +2918,8 @@ rtl8139_rxtest_cbr_before_msg db 'CBR before: ',0
 rtl8139_rxtest_cbr_after_msg db 'CBR after: ',0
 rtl8139_rxtest_isr_before_msg db 'ISR before: ',0
 rtl8139_rxtest_isr_after_msg db 'ISR after: ',0
+rtl8139_rxtest_cr_before_rcr_msg db 'CR before RCR: ',0
+rtl8139_rxtest_rcr_after_write_msg db 'RCR after write: ',0
 rtl8139_rxtest_mem_changed_msg db 'RX ring changed: ',0
 rtl8139_rxtest_tok_msg db 'TOK: ',0
 rtl8139_rxtest_rok_msg db 'ROK: ',0
@@ -2556,6 +3114,8 @@ rtl8139_rx_packet:
     call pm_print_hex8
     call pm_newline
 
+    call rtl8139_rx_dump_l3_fields
+
     cmp byte [edi + 12], 08h
     jne .advance
     cmp byte [edi + 13], 06h
@@ -2589,6 +3149,79 @@ rtl8139_rx_packet:
 
 .empty:
     mov esi, rtl8139_rx_empty_msg
+    call pm_print_string
+
+.done:
+    popad
+    ret
+
+rtl8139_rx_dump_l3_fields:
+    pushad
+
+    mov esi, rtl8139_rx_ethertype_msg
+    call pm_print_string
+    movzx eax, byte [edi + 12]
+    shl eax, 8
+    movzx ebx, byte [edi + 13]
+    or eax, ebx
+    call pm_print_hex32
+    call pm_newline
+
+    cmp byte [edi + 12], 08h
+    jne .not_ipv4
+    cmp byte [edi + 13], 00h
+    jne .not_ipv4
+    cmp byte [edi + 14], 45h
+    jne .not_ipv4
+
+    mov esi, rtl8139_rx_ipv4_protocol_msg
+    call pm_print_string
+    movzx eax, byte [edi + 23]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_rx_src_ip_msg
+    call pm_print_string
+    lea esi, [edi + 26]
+    call rtl8139_dump_ip
+    call pm_newline
+
+    mov esi, rtl8139_rx_dst_ip_msg
+    call pm_print_string
+    lea esi, [edi + 30]
+    call rtl8139_dump_ip
+    call pm_newline
+
+    mov esi, rtl8139_rx_icmp_type_msg
+    call pm_print_string
+    cmp byte [edi + 23], 01h
+    jne .icmp_na
+    movzx eax, byte [edi + 34]
+    call pm_print_uint32
+    call pm_newline
+    jmp .done
+
+.icmp_na:
+    mov esi, rtl8139_na_msg
+    call pm_print_string
+    jmp .done
+
+.not_ipv4:
+    mov esi, rtl8139_rx_ipv4_protocol_msg
+    call pm_print_string
+    mov esi, rtl8139_na_msg
+    call pm_print_string
+    mov esi, rtl8139_rx_icmp_type_msg
+    call pm_print_string
+    mov esi, rtl8139_na_msg
+    call pm_print_string
+    mov esi, rtl8139_rx_src_ip_msg
+    call pm_print_string
+    mov esi, rtl8139_na_msg
+    call pm_print_string
+    mov esi, rtl8139_rx_dst_ip_msg
+    call pm_print_string
+    mov esi, rtl8139_na_msg
     call pm_print_string
 
 .done:
@@ -2630,6 +3263,38 @@ rtl8139_rx_dump_current:
     call rtl8139_dump_bytes
 
     popad
+    ret
+
+rtl8139_rxipv4dump:
+    cmp byte [rtl8139_rx_ready], 1
+    jne .not_ready
+
+    mov esi, rtl8139_rxipv4dump_msg
+    call pm_print_string
+
+    mov ecx, 16
+.loop:
+    push ecx
+    call rtl8139_wait_for_rx_activity
+
+    mov dx, [rtl8139_io_base]
+    add dx, RTL8139_CR
+    in al, dx
+    test al, RTL8139_CR_BUFE
+    jnz .empty
+
+    call rtl8139_rx_packet
+    pop ecx
+    loop .loop
+    ret
+
+.empty:
+    pop ecx
+    ret
+
+.not_ready:
+    mov esi, rtl8139_rxpeek_notready_msg
+    call pm_print_string
     ret
 
 rtl8139_rx_parse_current:
@@ -2706,14 +3371,45 @@ rtl8139_rx_parse_current:
     jne .done
     cmp byte [esi + 23], 01h
     jne .done
-    cmp byte [esi + 34], 00h
-    jne .done
     cmp byte [esi + 35], 00h
     jne .done
+    cmp byte [esi + 34], 00h
+    jne .done
+
+    mov al, [esi + 26]
+    mov [rtl8139_last_icmp_src_ip], al
+    mov al, [esi + 27]
+    mov [rtl8139_last_icmp_src_ip + 1], al
+    mov al, [esi + 28]
+    mov [rtl8139_last_icmp_src_ip + 2], al
+    mov al, [esi + 29]
+    mov [rtl8139_last_icmp_src_ip + 3], al
+    mov al, [esi + 22]
+    mov [rtl8139_last_icmp_ttl], al
+    movzx eax, byte [esi + 40]
+    shl eax, 8
+    movzx edx, byte [esi + 41]
+    or eax, edx
+    mov [rtl8139_last_icmp_seq], ax
 
     inc dword [rtl8139_icmp_reply_count]
     mov esi, rtl8139_icmp_reply_msg
     call pm_print_string
+    mov esi, rtl8139_icmp_src_msg
+    call pm_print_string
+    mov esi, rtl8139_last_icmp_src_ip
+    call rtl8139_dump_ip
+    call pm_newline
+    mov esi, rtl8139_icmp_seq_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_last_icmp_seq]
+    call pm_print_uint32
+    call pm_newline
+    mov esi, rtl8139_icmp_ttl_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_last_icmp_ttl]
+    call pm_print_uint32
+    call pm_newline
 
 .done:
     popad
@@ -2845,6 +3541,13 @@ rtl8139_rxpacket_len_msg db 'len: ',0
 rtl8139_rxpacket_dst_msg db 'dst: ',0
 rtl8139_rxpacket_src_msg db 'src: ',0
 rtl8139_rxpacket_type_msg db 'type: ',0
+rtl8139_rx_ethertype_msg db 'RX ethertype: ',0
+rtl8139_rx_ipv4_protocol_msg db 'RX IPv4 protocol: ',0
+rtl8139_rx_icmp_type_msg db 'RX ICMP type: ',0
+rtl8139_rx_src_ip_msg db 'RX src IP: ',0
+rtl8139_rx_dst_ip_msg db 'RX dst IP: ',0
+rtl8139_rxipv4dump_msg db 'RX IPv4 dump',13,0
+rtl8139_na_msg db 'n/a',13,0
 rtl8139_rxpacket_arp_msg db 'ARP frame',13,0
 rtl8139_rxpacket_ipv4_msg db 'IPv4 frame',13,0
 rtl8139_rxpacket_discard_msg db 'RX packet discarded',13,0
@@ -2857,6 +3560,9 @@ rtl8139_arp_learned_msg db 'ARP reply: gateway MAC ',0
 rtl8139_arp_request_msg db 'ARP request',13,0
 rtl8139_arp_reply_msg db 'ARP reply',13,0
 rtl8139_icmp_reply_msg db 'ICMP echo reply',13,0
+rtl8139_icmp_src_msg db 'src IP: ',0
+rtl8139_icmp_seq_msg db 'seq: ',0
+rtl8139_icmp_ttl_msg db 'ttl: ',0
 rtl8139_arpstat_msg db 'ARP state:',13,0
 rtl8139_gateway_known_msg db 'gateway_mac=',0
 rtl8139_gateway_unknown_msg db 'gateway_mac=unknown',13,0
@@ -2897,6 +3603,8 @@ rtl8139_bind_pci_io:
     jmp .loop
 
 .bound:
+    call rtl8139_save_pci_bdf
+    call rtl8139_enable_pci_bus_master
     mov byte [pm_pci_nic_type], PCI_NIC_RTL8139
     mov esi, rtl8139_pci_bound_msg
     call pm_print_string
@@ -2906,6 +3614,7 @@ rtl8139_bind_pci_io:
     mov word [rtl8139_io_base], 0C000h
     mov dword [rtl8139_bar_raw], 0
     mov byte [rtl8139_bar_index], 0
+    mov byte [rtl8139_pci_bdf_valid], 0
     mov esi, rtl8139_pci_fallback_msg
     call pm_print_string
     ret
@@ -2935,3 +3644,4 @@ rtl8139_try_bind_io_bar:
 
 rtl8139_pci_bound_msg db 'RTL8139 PCI IO bound',13,0
 rtl8139_pci_fallback_msg db 'RTL8139 PCI bind failed, using fallback',13,0
+rtl8139_pci_cmd_unknown_msg db 'PCI CMD: unknown',13,0

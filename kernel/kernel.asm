@@ -43,6 +43,9 @@ halt_cpu:
 %include "kernel/math.inc"
 %include "kernel/fat12.inc"
 %include "kernel/browser.inc"
+%include "kernel/data.inc"
+%include "kernel/commands.inc"
+%include "kernel/shell.inc"
 %include "kernel/protected/gdt.inc"
 %include "kernel/protected/idt.inc"
 %include "kernel/protected/irq.inc"
@@ -56,13 +59,10 @@ halt_cpu:
 %include "kernel/protected/fat12.inc"
 %include "kernel/protected/browser32.inc"
 %include "kernel/protected/pci.inc"
+%include "kernel/protected/crypto/sha256.inc"
 %include "kernel/protected/net/rtl8139.inc"
 %include "kernel/protected/syscalls.inc"
 %include "kernel/protected/gex.inc"
 %include "kernel/protected/shell32.inc"
-[BITS 16]
-%include "kernel/commands.inc"
-%include "kernel/shell.inc"
-%include "kernel/data.inc"
 
 times KERNEL_SIZE-($-$$) db 0

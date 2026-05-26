@@ -141,6 +141,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_hmacsha256test
 
+    mov edi, pm_cmd_rngtest
+    call pm_starts_with_word
+    jc pm_do_rngtest
+
     mov edi, pm_cmd_netbar
     call pm_starts_with_word
     jc pm_do_netbar
@@ -457,6 +461,10 @@ pm_do_hmacsha256test:
     call hmac_sha256test
     jmp shell32_loop
 
+pm_do_rngtest:
+    call rngtest
+    jmp shell32_loop
+
 pm_do_netbar:
     call rtl8139_netbar
     jmp shell32_loop
@@ -742,7 +750,7 @@ pm_help_msg db \
 'Commands:',13,\
 'help cls clear echo version',13,\
 'mem heapinfo memmap pages',13,\
-'sha256test hmacsha256test',13,\
+'sha256test hmacsha256test rngtest',13,\
 'lspci netdev netup netstat netdiag netbar',13,\
 'mac setmac randommac',13,\
 'txdemo txdump pktdump pktinfo txstatus',13,\
@@ -796,6 +804,7 @@ pm_cmd_lspci db 'lspci',0
 pm_cmd_netdev db 'netdev',0
 pm_cmd_sha256test db 'sha256test',0
 cmd_hmacsha256test db 'hmacsha256test',0
+pm_cmd_rngtest db 'rngtest',0
 pm_cmd_netbar db 'netbar',0
 pm_cmd_netup db 'netup',0
 pm_cmd_netstat db 'netstat',0

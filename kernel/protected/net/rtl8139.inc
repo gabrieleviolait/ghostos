@@ -24,6 +24,8 @@ rtl8139_rx_count dd 0
 rtl8139_error_count dd 0
 rtl8139_tx_len dd 0
 rtl8139_io_base dw 0C000h
+rtl8139_bar_raw dd 0
+rtl8139_bar_index db 0
 rtl8139_rx_offset dd 0
 rtl8139_last_cbr dw 0
 rtl8139_gateway_mac_known db 0
@@ -39,6 +41,22 @@ db 52h,54h,00h,12h,34h,56h
 rtl8139_random_seed dd 12345678h
 
 rtl8139_netbar:
+    call rtl8139_bind_pci_io
+    cmp byte [rtl8139_bar_index], 1
+    je .bar1
+
+    mov esi, rtl8139_bar0_raw_msg
+    jmp .print_raw
+
+.bar1:
+    mov esi, rtl8139_bar1_raw_msg
+
+.print_raw:
+    call pm_print_string
+    mov eax, [rtl8139_bar_raw]
+    call pm_print_hex32
+    call pm_newline
+
     mov esi, rtl8139_netbar_msg
     call pm_print_string
     movzx eax, word [rtl8139_io_base]
@@ -46,6 +64,8 @@ rtl8139_netbar:
     call pm_newline
     ret
 
+rtl8139_bar0_raw_msg db 'BAR0 raw: ',0
+rtl8139_bar1_raw_msg db 'BAR1 raw: ',0
 rtl8139_netbar_msg db 'RTL8139 IO base: ',0
 
 rtl8139_netup:
@@ -1364,7 +1384,74 @@ rtl8139_arp_replies_msg db 'arp_replies=',0
 rtl8139_icmp_replies_msg db 'icmp_replies=',0
 
 rtl8139_bind_pci_io:
-    ; TODO: bind from PCI scan later
-    ; current fallback QEMU RTL8139 IO base
-    mov word [rtl8139_io_base], 0C000h
+    call pci_scan_bus
+    xor ebx, ebx
+
+.loop:
+    cmp ebx, [pm_pci_count]
+    jae .fallback
+
+    imul edi, ebx, PCI_RECORD_SIZE
+    add edi, pm_pci_records
+    call pm_pci_get_nic_type
+    jc .next
+    cmp al, PCI_NIC_RTL8139
+    jne .next
+
+    mov eax, [edi+PCI_REC_BAR0]
+    mov dword [rtl8139_bar_raw], eax
+    mov byte [rtl8139_bar_index], 0
+    call rtl8139_try_bind_io_bar
+    jnc .bound
+
+    mov eax, [edi+PCI_REC_BAR1]
+    mov dword [rtl8139_bar_raw], eax
+    mov byte [rtl8139_bar_index], 1
+    call rtl8139_try_bind_io_bar
+    jnc .bound
+
+    jmp .fallback
+
+.next:
+    inc ebx
+    jmp .loop
+
+.bound:
+    mov byte [pm_pci_nic_type], PCI_NIC_RTL8139
+    mov esi, rtl8139_pci_bound_msg
+    call pm_print_string
     ret
+
+.fallback:
+    mov word [rtl8139_io_base], 0C000h
+    mov dword [rtl8139_bar_raw], 0
+    mov byte [rtl8139_bar_index], 0
+    mov esi, rtl8139_pci_fallback_msg
+    call pm_print_string
+    ret
+
+rtl8139_try_bind_io_bar:
+    cmp eax, 0
+    je .bad
+    cmp eax, 0FFFFFFFFh
+    je .bad
+    test eax, 1
+    jz .bad
+
+    and eax, 0FFFFFFFCh
+    cmp eax, 0
+    je .bad
+    cmp eax, 10000h
+    jae .bad
+
+    mov [rtl8139_io_base], ax
+    mov [pm_pci_io_base], ax
+    clc
+    ret
+
+.bad:
+    stc
+    ret
+
+rtl8139_pci_bound_msg db 'RTL8139 PCI IO bound',13,0
+rtl8139_pci_fallback_msg db 'RTL8139 PCI bind failed, using fallback',13,0

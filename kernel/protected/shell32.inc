@@ -175,6 +175,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_arpfake
 
+    mov edi, pm_cmd_arp
+    call pm_starts_with_word
+    jc pm_do_arp
+
     mov edi, pm_cmd_arpstat
     call pm_starts_with_word
     jc pm_do_arpstat
@@ -222,6 +226,18 @@ shell32_loop:
     mov edi, pm_cmd_rxkick
     call pm_starts_with_word
     jc pm_do_rxkick
+
+    mov edi, pm_cmd_rxdebug
+    call pm_starts_with_word
+    jc pm_do_rxdebug
+
+    mov edi, pm_cmd_rxreset
+    call pm_starts_with_word
+    jc pm_do_rxreset
+
+    mov edi, pm_cmd_rxmode
+    call pm_starts_with_word
+    jc pm_do_rxmode
 
     mov edi, pm_cmd_rxstatus
     call pm_starts_with_word
@@ -431,6 +447,10 @@ pm_do_arpfake:
     call rtl8139_arpfake
     jmp shell32_loop
 
+pm_do_arp:
+    call rtl8139_arp
+    jmp shell32_loop
+
 pm_do_arpstat:
     call rtl8139_arpstat
     jmp shell32_loop
@@ -477,6 +497,18 @@ pm_do_rxpacket:
 
 pm_do_rxkick:
     call rtl8139_rxkick
+    jmp shell32_loop
+
+pm_do_rxdebug:
+    call rtl8139_rxdebug
+    jmp shell32_loop
+
+pm_do_rxreset:
+    call rtl8139_rxreset
+    jmp shell32_loop
+
+pm_do_rxmode:
+    call rtl8139_rxmode
     jmp shell32_loop
 
 pm_do_rxstatus:
@@ -627,8 +659,8 @@ pm_help_msg db \
 'lspci netdev netup netstat netdiag netbar',13,\
 'mac setmac randommac',13,\
 'txdemo txdump pktdump pktinfo txstatus',13,\
-'pinggw ping pingfake arpfake arpstat txreal',13,\
-'rxdump netreset netclear rxpoll rxpeek rxpacket rxkick rxstatus',13,\
+'pinggw ping pingfake arp arpfake arpstat txreal',13,\
+'rxdump netreset netclear rxpoll rxpeek rxpacket rxkick rxdebug rxreset rxmode rxstatus',13,\
 'regs stack uptime panic',13,\
 'tasks yield',13,\
 'ls cat browse run halt',13,0
@@ -686,6 +718,7 @@ pm_cmd_pinggw db 'pinggw',0
 pm_cmd_ping db 'ping',0
 pm_cmd_pingfake db 'pingfake',0
 pm_cmd_arpfake db 'arpfake',0
+pm_cmd_arp db 'arp',0
 pm_cmd_arpstat db 'arpstat',0
 pm_cmd_txdemo db 'txdemo',0
 pm_cmd_txdump db 'txdump',0
@@ -698,6 +731,9 @@ pm_cmd_rxpoll db 'rxpoll',0
 pm_cmd_rxpeek db 'rxpeek',0
 pm_cmd_rxpacket db 'rxpacket',0
 pm_cmd_rxkick db 'rxkick',0
+pm_cmd_rxdebug db 'rxdebug',0
+pm_cmd_rxreset db 'rxreset',0
+pm_cmd_rxmode db 'rxmode',0
 pm_cmd_rxstatus db 'rxstatus',0
 pm_cmd_netreset db 'netreset',0
 pm_cmd_netclear db 'netclear',0

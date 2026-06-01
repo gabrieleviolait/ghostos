@@ -5,10 +5,6 @@ GhostOS is an experimental x86 operating system written primarily in Assembly, f
 The project is developed as a learning and research platform to explore how modern network stacks and cryptographic systems operate beneath traditional operating systems and software frameworks.
 
 
-## Current Features
-
-### Core System
-
 =======
 ## Status
 

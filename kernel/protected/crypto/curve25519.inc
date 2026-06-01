@@ -110,40 +110,33 @@ curve25519test:
     ret
 
 x25519test:
+    call curve25519_load_test_scalar
     call x25519_ladder_init
 
     mov esi, x25519_test_msg
     call pm_print_string
 
-    mov esi, x25519_before_step_msg
-    call pm_print_string
-    mov esi, x25519_x2_msg
-    call pm_print_string
-    mov esi, x25519_x2
-    mov ecx, 32
-    call rtl8139_dump_bytes
+    call x25519_ladder_loop_skeleton
 
-    mov esi, x25519_z2_msg
+    mov esi, x25519_loop_count_msg
     call pm_print_string
-    mov esi, x25519_z2
-    mov ecx, 32
-    call rtl8139_dump_bytes
+    mov eax, [x25519_loop_count]
+    call pm_print_uint32
+    call pm_newline
 
-    mov esi, x25519_x3_msg
+    mov esi, x25519_last_bit_msg
     call pm_print_string
-    mov esi, x25519_x3
-    mov ecx, 32
-    call rtl8139_dump_bytes
+    movzx eax, byte [x25519_last_bit]
+    call pm_print_uint32
+    call pm_newline
 
-    mov esi, x25519_z3_msg
+    mov esi, x25519_swap_state_msg
     call pm_print_string
-    mov esi, x25519_z3
-    mov ecx, 32
-    call rtl8139_dump_bytes
+    movzx eax, byte [x25519_swap_state]
+    call pm_print_uint32
+    call pm_newline
 
-    call x25519_ladder_step_once
-
-    mov esi, x25519_after_step_msg
+    mov esi, x25519_final_state_msg
     call pm_print_string
     mov esi, x25519_x2_msg
     call pm_print_string
@@ -172,12 +165,16 @@ x25519test:
     ret
 
 curve25519_test_msg db 'GhostCrypto Curve25519 stub',13,0
-x25519_test_msg db 'GhostCrypto X25519 ladder step',13,0
+x25519_test_msg db 'GhostCrypto X25519 ladder loop skeleton',13,0
 x25519_before_step_msg db 'before step',13,0
 x25519_after_step_msg db 'after step',13,0
 x25519_before_cswap_msg db 'before cswap',13,0
 x25519_after_cswap_msg db 'after cswap',13,0
 x25519_restored_cswap_msg db 'restored cswap',13,0
+x25519_loop_count_msg db 'loop_count = ',0
+x25519_last_bit_msg db 'last_bit = ',0
+x25519_swap_state_msg db 'swap_state = ',0
+x25519_final_state_msg db 'final ladder state',13,0
 x25519_x1_msg db 'x1 = ',0
 x25519_x2_msg db 'x2 = ',0
 x25519_z2_msg db 'z2 = ',0
@@ -216,6 +213,9 @@ x25519_DA times 32 db 0
 x25519_CB times 32 db 0
 x25519_tmp2 times 32 db 0
 x25519_tmp3 times 32 db 0
+x25519_loop_count dd 0
+x25519_last_bit db 0
+x25519_swap_state db 0
 
 curve25519_basepoint:
     db 9
@@ -244,6 +244,64 @@ x25519_ladder_init:
 
     pop edi
     pop esi
+    ret
+
+x25519_ladder_loop_skeleton:
+    pushad
+
+    mov dword [x25519_loop_count], 0
+    mov byte [x25519_last_bit], 0
+    mov byte [x25519_swap_state], 0
+
+    mov ebx, 254
+
+.loop:
+    mov eax, ebx
+    shr eax, 3
+    mov dl, [curve25519_private_key + eax]
+
+    mov ecx, ebx
+    and ecx, 7
+    shr dl, cl
+    and dl, 1
+    mov [x25519_last_bit], dl
+
+    mov al, [x25519_swap_state]
+    xor al, dl
+    and al, 1
+
+    mov esi, x25519_x2
+    mov edi, x25519_x3
+    call curve25519_fe_cswap
+
+    mov esi, x25519_z2
+    mov edi, x25519_z3
+    call curve25519_fe_cswap
+
+    mov [x25519_swap_state], dl
+
+    call x25519_ladder_step_once
+    inc dword [x25519_loop_count]
+
+    cmp ebx, 0
+    je .final_cswap
+    dec ebx
+    jmp .loop
+
+.final_cswap:
+    mov al, [x25519_swap_state]
+
+    mov esi, x25519_x2
+    mov edi, x25519_x3
+    call curve25519_fe_cswap
+
+    mov esi, x25519_z2
+    mov edi, x25519_z3
+    call curve25519_fe_cswap
+
+    mov byte [x25519_swap_state], 0
+
+    popad
     ret
 
 x25519_ladder_step_once:

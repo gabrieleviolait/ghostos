@@ -1,7 +1,22 @@
+# Build artifacts
 build/
-*.bin
-*.img
-*.o
-*.iso
+iso/
+
+# Runtime artifacts
 *.log
+*.dump
+*.pcap
 ghostos.pcap
+
+# Local launchers
+run.ps1
+ghost.ps1
+
+# Editor
+.vscode/
+*.swp
+*~
+
+# Windows
+Thumbs.db
+Desktop.ini

@@ -39,10 +39,18 @@ iso: img check-iso
 	@echo "Created $(ISO)"
 
 run: img
-	qemu-system-i386 -fda $(IMG)
+	qemu-system-i386 \
+		-drive file=$(IMG),format=raw,if=floppy \
+		-boot a \
+		-vga std \
+		-netdev user,id=n0 \
+		-device rtl8139,netdev=n0
 
-run-iso: iso
-	qemu-system-i386 -cdrom $(ISO)
-
-clean:
-	rm -rf $(BUILD) $(ISO_DIR)
+run-dump: img
+	qemu-system-i386 \
+		-drive file=$(IMG),format=raw,if=floppy \
+		-boot a \
+		-vga std \
+		-netdev user,id=n0 \
+		-device rtl8139,netdev=n0 \
+		-object filter-dump,id=f1,netdev=n0,file=$(BUILD)/ghostos.pcap

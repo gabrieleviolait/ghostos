@@ -1,35 +1,138 @@
 # GhostOS
 
-Versione corrente: v1.5-alpha
+GhostOS is an experimental x86 operating system written primarily in Assembly, focused on understanding and implementing low-level networking, cryptography, and privacy-oriented protocols from first principles.
 
-Ghost OS e' un piccolo sistema operativo educativo in Assembly NASM
-16-bit real mode. Il kernel e' diviso in moduli `.inc`, la shell include
-una base storica 16-bit con FAT12/`.GHT` e ora avvia una shell 32-bit
-modulare con paging, heap minimale e task abstraction cooperativa.
-La shell `ghost32>` include lettura FAT12 read-only per `ls`, `cat` e
-`browse`, senza TCP/IP, DNS o stack HTTP.
-La fase corrente aggiunge fondamenta PCI con `lspci` e rilevamento NIC
-tramite `netdev`, senza inizializzare trasmissione, ricezione o interrupt NIC.
-La fase precedente stabilizza l'ABI runtime `.GEX` e aggiunge diagnostica
-protetta per registri, stack, uptime e heap.
-La shell `ghost32>` include il loader `.GEX` con `run HELLO.GEX [args]`,
-syscall stabili `print`, `read`, `exit`, `get_version`, `get_ticks` e
-ritorno sicuro alla CLI con codice di uscita.
-La shell protected ora ha editing minimale della riga, history e tab
-completion dei comandi noti.
-La fase v1.5-alpha resta CLI-only: solo discovery PCI/NIC, nessun pacchetto
-RX/TX e nessun livello TCP/IP o HTTP.
+The project is developed as a learning and research platform to explore how modern network stacks and cryptographic systems operate beneath traditional operating systems and software frameworks.
 
-## QEMU NIC examples
+## Current Features
 
-RTL8139:
+### Core System
 
-```sh
-qemu-system-i386 -drive file=build/ghostos.img,format=raw,if=floppy -vga std -netdev user,id=n0 -device rtl8139,netdev=n0
+* 16-bit bootloader
+* Protected Mode (ghost32)
+* Memory management foundations
+* Interactive shell
+* VGA text interface
+
+### Networking
+
+* PCI device discovery
+* Realtek RTL8139 network driver
+* Ethernet frame handling
+* ARP protocol
+* IPv4 packet processing
+* ICMP echo requests and replies
+* UDP packet transmission
+* Minimal TCP handshake implementation
+
+### Cryptography
+
+#### GhostCrypto v0.1
+
+* SHA-256 implementation
+* SHA-256 test vectors
+
+#### GhostCrypto v0.2
+
+* HMAC-SHA256
+* ipad/opad processing
+* Deterministic test validation
+
+#### GhostCrypto v0.3
+
+* Basic entropy collection
+* Pseudo-random number generation
+
+#### GhostCrypto v0.4 (Work In Progress)
+
+* Curve25519 foundations
+* X25519 scalar preparation
+* Private key clamping
+* Basepoint handling
+* Field arithmetic experiments
+* Early multiplication and reduction pipeline
+
+## Development Status
+
+GhostOS is currently in an experimental phase.
+
+The networking stack is functional for basic communication and testing.
+
+The cryptographic subsystem is under active development, with the long-term goal of supporting modern privacy-preserving protocols.
+
+## Roadmap
+
+### Curve25519 / X25519
+
+* Field arithmetic refinement
+* Proper reduction modulo 2^255−19
+* Montgomery ladder
+* X25519 scalar multiplication
+* Shared secret generation
+
+### GhostTLS
+
+* TLS record layer
+* ClientHello generation
+* Key derivation
+* Encrypted records
+
+### GhostTor
+
+* Tor link protocol
+* VERSIONS and NETINFO cells
+* CREATE2 / CREATED2
+* Circuit establishment
+* Minimal relay support
+
+## Building
+
+Requirements:
+
+* NASM
+* Python 3
+* QEMU
+
+Example build process:
+
+```bash
+nasm -f bin boot/boot.asm -o build/boot.bin
+nasm -f bin -w-label-redef-late kernel/kernel.asm -o build/kernel.bin
+python tools/mkfat12.py build/ghostos.img build/boot.bin build/kernel.bin
 ```
 
-E1000:
+Run:
 
-```sh
-qemu-system-i386 -drive file=build/ghostos.img,format=raw,if=floppy -vga std -netdev user,id=n0 -device e1000,netdev=n0
+```bash
+qemu-system-i386 \
+  -drive format=raw,file=build/ghostos.img \
+  -device rtl8139,netdev=n0 \
+  -netdev user,id=n0
 ```
+
+## Example Commands
+
+```text
+help
+pingtest
+udpsend 10.0.2.2 1234
+tcpconnect 10.0.2.2 80
+tcpstat
+
+sha256test
+hmacsha256test
+rngtest
+curve25519test
+```
+
+## Security Notice
+
+GhostOS is an experimental educational project.
+
+The networking and cryptographic implementations are under active development and must not be considered production-ready or security-audited.
+
+Do not use GhostOS to protect sensitive information.
+
+## License
+
+GhostOS is licensed under the GNU Affero General Public License v3.0 or later (AGPLv3).

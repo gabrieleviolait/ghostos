@@ -162,6 +162,16 @@ x25519test:
     mov ecx, 32
     call rtl8139_dump_bytes
 
+    mov esi, x25519_x2
+    mov edi, curve25519_fe_out
+    call curve25519_fe_invert
+
+    mov esi, x25519_inversion_result_msg
+    call pm_print_string
+    mov esi, curve25519_fe_out
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
     ret
 
 curve25519_test_msg db 'GhostCrypto Curve25519 stub',13,0
@@ -175,6 +185,7 @@ x25519_loop_count_msg db 'loop_count = ',0
 x25519_last_bit_msg db 'last_bit = ',0
 x25519_swap_state_msg db 'swap_state = ',0
 x25519_final_state_msg db 'final ladder state',13,0
+x25519_inversion_result_msg db 'inversion result = ',0
 x25519_x1_msg db 'x1 = ',0
 x25519_x2_msg db 'x2 = ',0
 x25519_z2_msg db 'z2 = ',0
@@ -216,6 +227,12 @@ x25519_tmp3 times 32 db 0
 x25519_loop_count dd 0
 x25519_last_bit db 0
 x25519_swap_state db 0
+curve25519_inv_t0 times 32 db 0
+curve25519_inv_t1 times 32 db 0
+curve25519_inv_t2 times 32 db 0
+curve25519_inv_t3 times 32 db 0
+curve25519_inv_input_ptr dd 0
+curve25519_inv_out_ptr dd 0
 
 curve25519_basepoint:
     db 9
@@ -492,6 +509,46 @@ curve25519_fe_cswap:
     pop ecx
     pop ebx
     pop eax
+    ret
+
+curve25519_fe_invert:
+    ; ESI = input field element
+    ; EDI = output field element
+    ; Skeleton only: this is not the full RFC7748 z^(p-2) chain yet.
+
+    pushad
+
+    mov [curve25519_inv_input_ptr], esi
+    mov [curve25519_inv_out_ptr], edi
+
+    ; t0 = z^2
+    mov edx, curve25519_inv_t0
+    call curve25519_fe_square
+
+    ; t1 = z^3
+    mov esi, curve25519_inv_t0
+    mov edi, [curve25519_inv_input_ptr]
+    mov edx, curve25519_inv_t1
+    call curve25519_fe_mul
+
+    ; t2 = z^6
+    mov esi, curve25519_inv_t1
+    mov edx, curve25519_inv_t2
+    call curve25519_fe_square
+
+    ; t3 = z^9
+    mov esi, curve25519_inv_t2
+    mov edi, curve25519_inv_t1
+    mov edx, curve25519_inv_t3
+    call curve25519_fe_mul
+
+    ; out = z^11 placeholder, proving the square/mul pipeline.
+    mov esi, curve25519_inv_t3
+    mov edi, curve25519_inv_t0
+    mov edx, [curve25519_inv_out_ptr]
+    call curve25519_fe_mul
+
+    popad
     ret
 
 curve25519_fe_mul_small:

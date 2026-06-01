@@ -115,21 +115,11 @@ x25519test:
     mov esi, x25519_test_msg
     call pm_print_string
 
-    mov esi, x25519_x1_msg
+    mov esi, x25519_before_cswap_msg
     call pm_print_string
-    mov esi, x25519_x1
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
     mov esi, x25519_x2_msg
     call pm_print_string
     mov esi, x25519_x2
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov esi, x25519_z2_msg
-    call pm_print_string
-    mov esi, x25519_z2
     mov ecx, 32
     call rtl8139_dump_bytes
 
@@ -139,9 +129,41 @@ x25519test:
     mov ecx, 32
     call rtl8139_dump_bytes
 
-    mov esi, x25519_z3_msg
+    mov esi, x25519_x2
+    mov edi, x25519_x3
+    mov al, 1
+    call curve25519_fe_cswap
+
+    mov esi, x25519_after_cswap_msg
     call pm_print_string
-    mov esi, x25519_z3
+    mov esi, x25519_x2_msg
+    call pm_print_string
+    mov esi, x25519_x2
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
+    mov esi, x25519_x3_msg
+    call pm_print_string
+    mov esi, x25519_x3
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
+    mov esi, x25519_x2
+    mov edi, x25519_x3
+    mov al, 1
+    call curve25519_fe_cswap
+
+    mov esi, x25519_restored_cswap_msg
+    call pm_print_string
+    mov esi, x25519_x2_msg
+    call pm_print_string
+    mov esi, x25519_x2
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
+    mov esi, x25519_x3_msg
+    call pm_print_string
+    mov esi, x25519_x3
     mov ecx, 32
     call rtl8139_dump_bytes
 
@@ -149,6 +171,9 @@ x25519test:
 
 curve25519_test_msg db 'GhostCrypto Curve25519 stub',13,0
 x25519_test_msg db 'GhostCrypto X25519 ladder init',13,0
+x25519_before_cswap_msg db 'before cswap',13,0
+x25519_after_cswap_msg db 'after cswap',13,0
+x25519_restored_cswap_msg db 'restored cswap',13,0
 x25519_x1_msg db 'x1 = ',0
 x25519_x2_msg db 'x2 = ',0
 x25519_z2_msg db 'z2 = ',0
@@ -250,6 +275,44 @@ curve25519_fe_copy:
     jnz .copy
 
     pop ecx
+    ret
+
+curve25519_fe_cswap:
+    ; ESI = buffer A
+    ; EDI = buffer B
+    ; AL = swap flag 0/1
+
+    push eax
+    push ebx
+    push ecx
+    push edx
+    push esi
+    push edi
+
+    test al, 1
+    jz .done
+
+    mov ecx, 32
+
+.loop:
+    mov dl, [esi]
+    mov bl, [edi]
+    mov [esi], bl
+    mov [edi], dl
+
+    inc esi
+    inc edi
+
+    dec ecx
+    jnz .loop
+
+.done:
+    pop edi
+    pop esi
+    pop edx
+    pop ecx
+    pop ebx
+    pop eax
     ret
 
 

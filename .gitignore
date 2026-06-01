@@ -4,3 +4,4 @@ build/
 *.o
 *.iso
 *.log
+ghostos.pcap

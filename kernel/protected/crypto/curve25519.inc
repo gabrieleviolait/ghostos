@@ -109,7 +109,51 @@ curve25519test:
 
     ret
 
+x25519test:
+    call x25519_ladder_init
+
+    mov esi, x25519_test_msg
+    call pm_print_string
+
+    mov esi, x25519_x1_msg
+    call pm_print_string
+    mov esi, x25519_x1
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
+    mov esi, x25519_x2_msg
+    call pm_print_string
+    mov esi, x25519_x2
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
+    mov esi, x25519_z2_msg
+    call pm_print_string
+    mov esi, x25519_z2
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
+    mov esi, x25519_x3_msg
+    call pm_print_string
+    mov esi, x25519_x3
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
+    mov esi, x25519_z3_msg
+    call pm_print_string
+    mov esi, x25519_z3
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
+    ret
+
 curve25519_test_msg db 'GhostCrypto Curve25519 stub',13,0
+x25519_test_msg db 'GhostCrypto X25519 ladder init',13,0
+x25519_x1_msg db 'x1 = ',0
+x25519_x2_msg db 'x2 = ',0
+x25519_z2_msg db 'z2 = ',0
+x25519_x3_msg db 'x3 = ',0
+x25519_z3_msg db 'z3 = ',0
 
 x25519_test_scalar:
     db 01h, 02h, 03h, 04h, 05h, 06h, 07h, 08h
@@ -124,10 +168,42 @@ curve25519_fe_b times 32 db 0
 curve25519_fe_out times 32 db 0
 curve25519_mul_temp times 64 dw 0
 curve25519_mul_out_ptr dd 0
+x25519_x1 times 32 db 0
+x25519_x2 times 32 db 0
+x25519_z2 times 32 db 0
+x25519_x3 times 32 db 0
+x25519_z3 times 32 db 0
+x25519_tmp0 times 32 db 0
+x25519_tmp1 times 32 db 0
 
 curve25519_basepoint:
     db 9
     times 31 db 0
+
+x25519_ladder_init:
+    push esi
+    push edi
+
+    mov esi, curve25519_basepoint
+    mov edi, x25519_x1
+    call curve25519_fe_copy
+
+    mov edi, x25519_x2
+    call curve25519_fe_one
+
+    mov edi, x25519_z2
+    call curve25519_fe_zero
+
+    mov esi, curve25519_basepoint
+    mov edi, x25519_x3
+    call curve25519_fe_copy
+
+    mov edi, x25519_z3
+    call curve25519_fe_one
+
+    pop edi
+    pop esi
+    ret
 
 curve25519_load_test_scalar:
     push esi

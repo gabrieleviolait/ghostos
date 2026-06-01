@@ -155,3 +155,13 @@ Do not use GhostOS to protect sensitive information.
 ## License
 
 GhostOS is licensed under the GNU Affero General Public License v3.0 or later (AGPLv3).
+
+## Disclaimer
+
+This project is experimental and intended for educational and research purposes only.
+
+It is not production-ready and should not be used in environments where security, privacy, reliability, or legal compliance are required.
+
+The author is not responsible for misuse, damage, data loss, security incidents, or any consequences resulting from the use of this software.
+
+Use at your own risk.

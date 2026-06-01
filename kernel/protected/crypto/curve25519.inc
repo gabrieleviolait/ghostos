@@ -82,6 +82,31 @@ curve25519test:
     mov ecx, 32
     call rtl8139_dump_bytes
 
+    mov al, 9
+    mov edi, curve25519_fe_a
+    call curve25519_fe_set_small
+
+    mov esi, curve25519_fe_a
+    mov edx, curve25519_fe_out
+    call curve25519_fe_square
+
+    mov esi, curve25519_fe_out
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
+    mov al, 9
+    mov edi, curve25519_fe_a
+    call curve25519_fe_set_small
+
+    mov esi, curve25519_fe_a
+    mov edi, curve25519_fe_a
+    mov edx, curve25519_fe_out
+    call curve25519_fe_mul
+
+    mov esi, curve25519_fe_out
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
     ret
 
 curve25519_test_msg db 'GhostCrypto Curve25519 stub',13,0
@@ -341,25 +366,25 @@ curve25519_fe_square:
 
 curve25519_fe_reduce:
     ; very early pseudo reduction
-    ; folds upper half back into lower half * 19
+    ; folds temp[32..63] back into temp[0..31] * 19
 
     pushad
 
     mov ecx, 32
     mov esi, curve25519_mul_temp
-    add esi, 64          ; upper half
+    add esi, 64          ; upper word slots: temp[32]
 
     mov edi, curve25519_mul_temp
 
 .loop:
-    mov al, [esi]
+    mov ax, [esi]
+    mov bx, 19
+    mul bx               ; DX:AX = upper word * 19
 
-    mov ah, 19
-    mul ah               ; AX = upper * 19
+    add [edi], ax
+    mov word [esi], 0
 
-    add [edi], al
-
-    inc esi
+    add esi, 2
     add edi, 2
 
     dec ecx

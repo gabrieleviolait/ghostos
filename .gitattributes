@@ -1,0 +1,14 @@
+* text=auto
+
+*.asm text eol=lf
+*.inc text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+Makefile text eol=lf
+
+*.ps1 text eol=crlf
+
+*.bin binary
+*.img binary
+*.iso binary
+*.pcap binary

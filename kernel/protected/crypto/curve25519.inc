@@ -116,7 +116,7 @@ x25519test:
     mov esi, x25519_test_msg
     call pm_print_string
 
-    call x25519_ladder_loop_skeleton
+    call x25519_generate_public_skeleton
 
     mov esi, x25519_loop_count_msg
     call pm_print_string
@@ -162,13 +162,15 @@ x25519test:
     mov ecx, 32
     call rtl8139_dump_bytes
 
-    mov esi, x25519_x2
-    mov edi, curve25519_fe_out
-    call curve25519_fe_invert
-
     mov esi, x25519_inversion_result_msg
     call pm_print_string
     mov esi, curve25519_fe_out
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
+    mov esi, x25519_public_key_msg
+    call pm_print_string
+    mov esi, curve25519_public_key
     mov ecx, 32
     call rtl8139_dump_bytes
 
@@ -186,6 +188,7 @@ x25519_last_bit_msg db 'last_bit = ',0
 x25519_swap_state_msg db 'swap_state = ',0
 x25519_final_state_msg db 'final ladder state',13,0
 x25519_inversion_result_msg db 'inversion result = ',0
+x25519_public_key_msg db 'public key = ',0
 x25519_x1_msg db 'x1 = ',0
 x25519_x2_msg db 'x2 = ',0
 x25519_z2_msg db 'z2 = ',0
@@ -261,6 +264,23 @@ x25519_ladder_init:
 
     pop edi
     pop esi
+    ret
+
+x25519_generate_public_skeleton:
+    pushad
+
+    call x25519_ladder_loop_skeleton
+
+    mov esi, x25519_z2
+    mov edi, curve25519_fe_out
+    call curve25519_fe_invert
+
+    mov esi, x25519_x2
+    mov edi, curve25519_fe_out
+    mov edx, curve25519_public_key
+    call curve25519_fe_mul
+
+    popad
     ret
 
 x25519_ladder_loop_skeleton:

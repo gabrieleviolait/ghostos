@@ -4,31 +4,7 @@
 ; ============================================================
 
 curve25519test:
-    call rng_next32
-    mov [curve25519_private_key], eax
-
-    call rng_next32
-    mov [curve25519_private_key + 4], eax
-
-    call rng_next32
-    mov [curve25519_private_key + 8], eax
-
-    call rng_next32
-    mov [curve25519_private_key + 12], eax
-
-    call rng_next32
-    mov [curve25519_private_key + 16], eax
-
-    call rng_next32
-    mov [curve25519_private_key + 20], eax
-
-    call rng_next32
-    mov [curve25519_private_key + 24], eax
-
-    call rng_next32
-    mov [curve25519_private_key + 28], eax
-
-    call curve25519_clamp_private
+    call curve25519_load_test_scalar
 
     mov esi, curve25519_test_msg
     call pm_print_string
@@ -110,6 +86,12 @@ curve25519test:
 
 curve25519_test_msg db 'GhostCrypto Curve25519 stub',13,0
 
+x25519_test_scalar:
+    db 01h, 02h, 03h, 04h, 05h, 06h, 07h, 08h
+    db 09h, 0Ah, 0Bh, 0Ch, 0Dh, 0Eh, 0Fh, 10h
+    db 11h, 12h, 13h, 14h, 15h, 16h, 17h, 18h
+    db 19h, 1Ah, 1Bh, 1Ch, 1Dh, 1Eh, 1Fh, 20h
+
 curve25519_private_key times 32 db 0
 curve25519_public_key  times 32 db 0
 curve25519_fe_a times 32 db 0
@@ -121,6 +103,20 @@ curve25519_mul_out_ptr dd 0
 curve25519_basepoint:
     db 9
     times 31 db 0
+
+curve25519_load_test_scalar:
+    push esi
+    push edi
+
+    mov esi, x25519_test_scalar
+    mov edi, curve25519_private_key
+    call curve25519_fe_copy
+
+    call curve25519_clamp_private
+
+    pop edi
+    pop esi
+    ret
 
 curve25519_clamp_private:
     ; clamp per X25519
@@ -279,24 +275,9 @@ curve25519_fe_mul:
     jmp .outer
 
 .done:
-    ; fold carries across 64 word slots
-    mov ecx, 63
-    mov ebp, curve25519_mul_temp
-
-.fold:
-    mov ax, [ebp]
-    mov dx, ax
-    and ax, 00FFh
-    mov [ebp], ax
-
-    shr dx, 8
-    add [ebp + 2], dx
-
-    add ebp, 2
-    dec ecx
-    jnz .fold
-
+    call curve25519_mul_fold_carry
     call curve25519_fe_reduce
+    call curve25519_mul_fold_carry
 
     ; copy low byte of first 32 word slots to out
     mov esi, curve25519_mul_temp
@@ -314,6 +295,36 @@ curve25519_fe_mul:
     jnz .copy
 
     popad
+    ret
+
+curve25519_mul_fold_carry:
+    ; folds byte carries across 64 word slots in curve25519_mul_temp
+
+    push eax
+    push ecx
+    push edx
+    push ebp
+
+    mov ecx, 63
+    mov ebp, curve25519_mul_temp
+
+.fold:
+    mov ax, [ebp]
+    mov dx, ax
+    and ax, 00FFh
+    mov [ebp], ax
+
+    shr dx, 8
+    add [ebp + 2], dx
+
+    add ebp, 2
+    dec ecx
+    jnz .fold
+
+    pop ebp
+    pop edx
+    pop ecx
+    pop eax
     ret
 
 curve25519_fe_square:

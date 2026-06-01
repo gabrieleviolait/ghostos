@@ -4,6 +4,29 @@ GhostOS is an experimental x86 operating system written primarily in Assembly, f
 
 The project is developed as a learning and research platform to explore how modern network stacks and cryptographic systems operate beneath traditional operating systems and software frameworks.
 
+
+## Current Features
+
+### Core System
+
+=======
+## Status
+
+| Area | Status |
+|---|---|
+| Bootloader | ✅ Working |
+| Protected Mode | ✅ Working |
+| RTL8139 Driver | ✅ Working |
+| ARP / IPv4 / ICMP | ✅ Working |
+| UDP | ✅ Working |
+| TCP Handshake | ✅ Working |
+| SHA-256 | ✅ Working |
+| HMAC-SHA256 | ✅ Working |
+| RNG | ✅ Basic |
+| Curve25519 / X25519 | 🚧 Work in Progress |
+| TLS | ⬜ Planned |
+| Tor Link Protocol | ⬜ Planned |
+
 ## Current Features
 
 ### Core System

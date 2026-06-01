@@ -115,11 +115,17 @@ x25519test:
     mov esi, x25519_test_msg
     call pm_print_string
 
-    mov esi, x25519_before_cswap_msg
+    mov esi, x25519_before_step_msg
     call pm_print_string
     mov esi, x25519_x2_msg
     call pm_print_string
     mov esi, x25519_x2
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
+    mov esi, x25519_z2_msg
+    call pm_print_string
+    mov esi, x25519_z2
     mov ecx, 32
     call rtl8139_dump_bytes
 
@@ -129,16 +135,25 @@ x25519test:
     mov ecx, 32
     call rtl8139_dump_bytes
 
-    mov esi, x25519_x2
-    mov edi, x25519_x3
-    mov al, 1
-    call curve25519_fe_cswap
+    mov esi, x25519_z3_msg
+    call pm_print_string
+    mov esi, x25519_z3
+    mov ecx, 32
+    call rtl8139_dump_bytes
 
-    mov esi, x25519_after_cswap_msg
+    call x25519_ladder_step_once
+
+    mov esi, x25519_after_step_msg
     call pm_print_string
     mov esi, x25519_x2_msg
     call pm_print_string
     mov esi, x25519_x2
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
+    mov esi, x25519_z2_msg
+    call pm_print_string
+    mov esi, x25519_z2
     mov ecx, 32
     call rtl8139_dump_bytes
 
@@ -148,29 +163,18 @@ x25519test:
     mov ecx, 32
     call rtl8139_dump_bytes
 
-    mov esi, x25519_x2
-    mov edi, x25519_x3
-    mov al, 1
-    call curve25519_fe_cswap
-
-    mov esi, x25519_restored_cswap_msg
+    mov esi, x25519_z3_msg
     call pm_print_string
-    mov esi, x25519_x2_msg
-    call pm_print_string
-    mov esi, x25519_x2
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov esi, x25519_x3_msg
-    call pm_print_string
-    mov esi, x25519_x3
+    mov esi, x25519_z3
     mov ecx, 32
     call rtl8139_dump_bytes
 
     ret
 
 curve25519_test_msg db 'GhostCrypto Curve25519 stub',13,0
-x25519_test_msg db 'GhostCrypto X25519 ladder init',13,0
+x25519_test_msg db 'GhostCrypto X25519 ladder step',13,0
+x25519_before_step_msg db 'before step',13,0
+x25519_after_step_msg db 'after step',13,0
 x25519_before_cswap_msg db 'before cswap',13,0
 x25519_after_cswap_msg db 'after cswap',13,0
 x25519_restored_cswap_msg db 'restored cswap',13,0
@@ -193,6 +197,7 @@ curve25519_fe_b times 32 db 0
 curve25519_fe_out times 32 db 0
 curve25519_mul_temp times 64 dw 0
 curve25519_mul_out_ptr dd 0
+curve25519_mul_small_const times 32 db 0
 x25519_x1 times 32 db 0
 x25519_x2 times 32 db 0
 x25519_z2 times 32 db 0
@@ -200,6 +205,17 @@ x25519_x3 times 32 db 0
 x25519_z3 times 32 db 0
 x25519_tmp0 times 32 db 0
 x25519_tmp1 times 32 db 0
+x25519_A times 32 db 0
+x25519_B times 32 db 0
+x25519_AA times 32 db 0
+x25519_BB times 32 db 0
+x25519_E times 32 db 0
+x25519_C times 32 db 0
+x25519_D times 32 db 0
+x25519_DA times 32 db 0
+x25519_CB times 32 db 0
+x25519_tmp2 times 32 db 0
+x25519_tmp3 times 32 db 0
 
 curve25519_basepoint:
     db 9
@@ -228,6 +244,111 @@ x25519_ladder_init:
 
     pop edi
     pop esi
+    ret
+
+x25519_ladder_step_once:
+    pushad
+
+    ; A = x2 + z2
+    mov esi, x25519_x2
+    mov edi, x25519_z2
+    mov edx, x25519_A
+    call curve25519_fe_add
+
+    ; AA = A^2
+    mov esi, x25519_A
+    mov edx, x25519_AA
+    call curve25519_fe_square
+
+    ; B = x2 - z2
+    mov esi, x25519_x2
+    mov edi, x25519_z2
+    mov edx, x25519_B
+    call curve25519_fe_sub
+
+    ; BB = B^2
+    mov esi, x25519_B
+    mov edx, x25519_BB
+    call curve25519_fe_square
+
+    ; E = AA - BB
+    mov esi, x25519_AA
+    mov edi, x25519_BB
+    mov edx, x25519_E
+    call curve25519_fe_sub
+
+    ; C = x3 + z3
+    mov esi, x25519_x3
+    mov edi, x25519_z3
+    mov edx, x25519_C
+    call curve25519_fe_add
+
+    ; D = x3 - z3
+    mov esi, x25519_x3
+    mov edi, x25519_z3
+    mov edx, x25519_D
+    call curve25519_fe_sub
+
+    ; DA = D * A
+    mov esi, x25519_D
+    mov edi, x25519_A
+    mov edx, x25519_DA
+    call curve25519_fe_mul
+
+    ; CB = C * B
+    mov esi, x25519_C
+    mov edi, x25519_B
+    mov edx, x25519_CB
+    call curve25519_fe_mul
+
+    ; x3 = (DA + CB)^2
+    mov esi, x25519_DA
+    mov edi, x25519_CB
+    mov edx, x25519_tmp0
+    call curve25519_fe_add
+
+    mov esi, x25519_tmp0
+    mov edx, x25519_x3
+    call curve25519_fe_square
+
+    ; z3 = x1 * (DA - CB)^2
+    mov esi, x25519_DA
+    mov edi, x25519_CB
+    mov edx, x25519_tmp0
+    call curve25519_fe_sub
+
+    mov esi, x25519_tmp0
+    mov edx, x25519_tmp1
+    call curve25519_fe_square
+
+    mov esi, x25519_x1
+    mov edi, x25519_tmp1
+    mov edx, x25519_z3
+    call curve25519_fe_mul
+
+    ; x2 = AA * BB
+    mov esi, x25519_AA
+    mov edi, x25519_BB
+    mov edx, x25519_x2
+    call curve25519_fe_mul
+
+    ; z2 = E * (AA + 121665 * E)
+    mov esi, x25519_E
+    mov eax, 121665
+    mov edx, x25519_tmp2
+    call curve25519_fe_mul_small
+
+    mov esi, x25519_AA
+    mov edi, x25519_tmp2
+    mov edx, x25519_tmp3
+    call curve25519_fe_add
+
+    mov esi, x25519_E
+    mov edi, x25519_tmp3
+    mov edx, x25519_z2
+    call curve25519_fe_mul
+
+    popad
     ret
 
 curve25519_load_test_scalar:
@@ -313,6 +434,31 @@ curve25519_fe_cswap:
     pop ecx
     pop ebx
     pop eax
+    ret
+
+curve25519_fe_mul_small:
+    ; ESI = field element
+    ; EAX = small constant
+    ; EDX = out
+
+    pushad
+
+    mov edi, curve25519_mul_small_const
+    call curve25519_fe_zero
+
+    mov edi, curve25519_mul_small_const
+    mov [edi], al
+    shr eax, 8
+    mov [edi + 1], al
+    shr eax, 8
+    mov [edi + 2], al
+    shr eax, 8
+    mov [edi + 3], al
+
+    mov edi, curve25519_mul_small_const
+    call curve25519_fe_mul
+
+    popad
     ret
 
 
@@ -419,7 +565,7 @@ curve25519_fe_mul:
     mov al, [esi + ebx]
     mov dl, [edi + ecx]
     mul dl                 ; AX = AL * DL
-    mov si, ax             ; save product
+    mov dx, ax             ; save product
 
     mov ebp, curve25519_mul_temp
     mov eax, ebx
@@ -428,7 +574,7 @@ curve25519_fe_mul:
     add ebp, eax
 
     mov ax, [ebp]
-    add ax, si
+    add ax, dx
     mov [ebp], ax
 
     inc ecx

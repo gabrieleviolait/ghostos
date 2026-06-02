@@ -6,7 +6,10 @@
 x25519_rfc_alice_msg db 'A ',0
 x25519_rfc_bob_msg db 'B ',0
 x25519_rfc_shared_msg db 'S ',0
-x25519_rfc_final_msg db 'RFC ',0
+x25519_rfc_shared_ab_msg db 'AB ',0
+x25519_rfc_shared_ba_msg db 'BA ',0
+x25519_shared_init_msg db 'I ',0
+x25519_rfc_final_msg db 'R ',0
 x25519_rfc_pass_msg db 'PASS',13,0
 x25519_rfc_fail_msg db 'FAIL',13,0
 x25519_field_add_msg db 'Fa ',0
@@ -16,15 +19,11 @@ x25519_field_square_msg db 'Fq ',0
 x25519_field_p_msg db 'Fp ',0
 x25519_field_p1_msg db 'F1 ',0
 x25519_field_neg_msg db 'Fn ',0
-x25519_field_neg_square_msg db 'Fnq ',0
-x25519_field_neg_z_msg db 'Fnz ',0
-x25519_inv_one_msg db 'Fi1 ',0
-x25519_inv_nine_msg db 'Fi9 ',0
-x25519_inv_x_msg db 'Fix ',0
-x25519_ladder_init_msg db 'Li ',0
-x25519_ladder_swap_msg db 'Ls ',0
-x25519_ladder_bits_msg db 'Lb ',0
-x25519_ladder_step_msg db 'L1 ',0
+x25519_field_neg_square_msg db 'Fq- ',0
+x25519_field_neg_z_msg db 'Fz- ',0
+x25519_inv_one_msg db 'I1 ',0
+x25519_inv_nine_msg db 'I9 ',0
+x25519_inv_x_msg db 'Ix ',0
 ; RFC7748 section 5.2 X25519 test vectors.
 x25519_rfc7748_alice_private:
     db 077h, 007h, 06Dh, 00Ah, 073h, 018h, 0A5h, 07Dh
@@ -54,7 +53,7 @@ x25519_rfc7748_shared:
     db 04Ah, 05Dh, 09Dh, 05Bh, 0A4h, 0CEh, 02Dh, 0E1h
     db 072h, 08Eh, 03Bh, 0F4h, 080h, 035h, 0F2h, 05Eh
     db 007h, 0E2h, 01Ch, 094h, 07Dh, 019h, 0E3h, 037h
-    db 06Fh, 009h, 0B3h, 0C1h, 0E1h, 061h, 074h, 02h
+    db 06Fh, 009h, 0B3h, 0C1h, 0E1h, 061h, 074h, 042h
 
 curve25519_private_key times 32 db 0
 curve25519_public_key  times 32 db 0
@@ -171,7 +170,6 @@ x25519_rfc7748_validate:
 
     call x25519_field_selftest
     call x25519_invert_selftest
-    call x25519_ladder_selftest
     mov byte [x25519_rfc_fail_flag], 0
 
     mov esi, x25519_rfc7748_alice_private
@@ -198,6 +196,11 @@ x25519_rfc7748_validate:
     mov esi, x25519_rfc_bob_msg
     call x25519_rfc7748_print_result
 
+    mov esi, x25519_rfc7748_bob_public
+    call x25519_check_shared_init
+    mov esi, x25519_shared_init_msg
+    call x25519_rfc7748_print_result
+
     mov esi, x25519_rfc7748_alice_private
     mov edi, curve25519_private_key
     call curve25519_fe_copy
@@ -206,6 +209,26 @@ x25519_rfc7748_validate:
     mov edi, x25519_peer_public_key
     call curve25519_fe_copy
     call x25519_generate_shared_secret_skeleton
+    mov esi, x25519_shared_secret
+    mov edi, x25519_rfc7748_shared
+    call curve25519_memcmp32
+    mov esi, x25519_rfc_shared_ab_msg
+    call x25519_rfc7748_print_result
+
+    mov esi, x25519_rfc7748_bob_private
+    mov edi, curve25519_private_key
+    call curve25519_fe_copy
+    call curve25519_clamp_private
+    mov esi, x25519_rfc7748_alice_public
+    mov edi, x25519_peer_public_key
+    call curve25519_fe_copy
+    call x25519_generate_shared_secret_skeleton
+    mov esi, x25519_shared_secret
+    mov edi, x25519_rfc7748_shared
+    call curve25519_memcmp32
+    mov esi, x25519_rfc_shared_ba_msg
+    call x25519_rfc7748_print_result
+
     mov esi, x25519_shared_secret
     mov edi, x25519_rfc7748_shared
     call curve25519_memcmp32
@@ -238,6 +261,45 @@ x25519_rfc7748_print_result:
 .pass:
     mov esi, x25519_rfc_pass_msg
     call pm_print_string
+    ret
+
+x25519_check_shared_init:
+    mov [curve25519_inv_input_ptr], esi
+    call x25519_ladder_init
+    mov esi, [curve25519_inv_input_ptr]
+    mov edi, x25519_x1
+    call curve25519_fe_copy
+    mov esi, [curve25519_inv_input_ptr]
+    mov edi, x25519_x3
+    call curve25519_fe_copy
+
+    mov esi, x25519_x1
+    mov edi, [curve25519_inv_input_ptr]
+    call curve25519_memcmp32
+    cmp eax, 1
+    jne .fail
+    mov esi, x25519_x3
+    mov edi, [curve25519_inv_input_ptr]
+    call curve25519_memcmp32
+    cmp eax, 1
+    jne .fail
+    mov esi, x25519_x2
+    mov al, 1
+    call curve25519_fe_is_small
+    cmp eax, 1
+    jne .fail
+    mov esi, x25519_z2
+    xor al, al
+    call curve25519_fe_is_small
+    cmp eax, 1
+    jne .fail
+    mov esi, x25519_z3
+    mov al, 1
+    call curve25519_fe_is_small
+    ret
+
+.fail:
+    xor eax, eax
     ret
 
 x25519_field_selftest:
@@ -394,185 +456,6 @@ x25519_invert_product_is_one:
     mov esi, curve25519_fe_out
     mov al, 1
     call curve25519_fe_is_small
-    ret
-
-x25519_ladder_selftest:
-    pushad
-
-    call x25519_ladder_check_init
-    mov esi, x25519_ladder_init_msg
-    call x25519_rfc7748_print_result
-
-    call x25519_ladder_check_swap
-    mov esi, x25519_ladder_swap_msg
-    call x25519_rfc7748_print_result
-
-    call x25519_ladder_check_bits
-    mov esi, x25519_ladder_bits_msg
-    call x25519_rfc7748_print_result
-
-    call x25519_ladder_check_step_once
-    mov esi, x25519_ladder_step_msg
-    call x25519_rfc7748_print_result
-
-    popad
-    ret
-
-x25519_ladder_check_init:
-    call x25519_ladder_init
-    mov esi, x25519_x1
-    mov al, 9
-    call curve25519_fe_is_small
-    cmp eax, 1
-    jne .fail
-    mov esi, x25519_x2
-    mov al, 1
-    call curve25519_fe_is_small
-    cmp eax, 1
-    jne .fail
-    mov esi, x25519_z2
-    xor al, al
-    call curve25519_fe_is_small
-    cmp eax, 1
-    jne .fail
-    mov esi, x25519_x3
-    mov al, 9
-    call curve25519_fe_is_small
-    cmp eax, 1
-    jne .fail
-    mov esi, x25519_z3
-    mov al, 1
-    call curve25519_fe_is_small
-    ret
-
-.fail:
-    xor eax, eax
-    ret
-
-x25519_ladder_check_swap:
-    mov al, 1
-    mov edi, x25519_x2
-    call curve25519_fe_set_small
-    mov al, 9
-    mov edi, x25519_x3
-    call curve25519_fe_set_small
-
-    mov al, 1
-    mov esi, x25519_x2
-    mov edi, x25519_x3
-    call curve25519_fe_cswap
-    mov esi, x25519_x2
-    mov al, 9
-    call curve25519_fe_is_small
-    cmp eax, 1
-    jne .fail
-    mov esi, x25519_x3
-    mov al, 1
-    call curve25519_fe_is_small
-    cmp eax, 1
-    jne .fail
-
-    mov al, 1
-    mov esi, x25519_x2
-    mov edi, x25519_x3
-    call curve25519_fe_cswap
-    mov esi, x25519_x2
-    mov al, 1
-    call curve25519_fe_is_small
-    cmp eax, 1
-    jne .fail
-    mov esi, x25519_x3
-    mov al, 9
-    call curve25519_fe_is_small
-    ret
-
-.fail:
-    xor eax, eax
-    ret
-
-x25519_ladder_check_bits:
-    mov esi, x25519_rfc7748_alice_private
-    mov edi, curve25519_private_key
-    call curve25519_fe_copy
-    call curve25519_clamp_private
-
-    mov ebx, 254
-    xor edx, edx
-
-.loop:
-    mov eax, ebx
-    shr eax, 3
-    mov al, [curve25519_private_key + eax]
-    mov ecx, ebx
-    and ecx, 7
-    shr al, cl
-    and al, 1
-
-    cmp ebx, 254
-    jne .not_first
-    cmp al, 1
-    jne .fail
-
-.not_first:
-    cmp ebx, 0
-    jne .count
-    cmp al, 0
-    jne .fail
-
-.count:
-    inc edx
-    cmp ebx, 0
-    je .done
-    dec ebx
-    jmp .loop
-
-.done:
-    xor eax, eax
-    cmp edx, 255
-    jne .ret
-    inc eax
-
-.ret:
-    ret
-
-.fail:
-    xor eax, eax
-    ret
-
-x25519_ladder_check_step_once:
-    call x25519_ladder_init
-    call x25519_ladder_step_once
-
-    mov esi, x25519_x2
-    mov al, 1
-    call curve25519_fe_is_small
-    cmp eax, 1
-    jne .fail
-    mov esi, x25519_z2
-    xor al, al
-    call curve25519_fe_is_small
-    cmp eax, 1
-    jne .fail
-    call x25519_ladder_check_x3
-    cmp eax, 1
-    jne .fail
-    call x25519_ladder_check_z3
-    ret
-
-.fail:
-    xor eax, eax
-    ret
-
-x25519_ladder_check_x3:
-    mov esi, x25519_x3
-    mov eax, 324
-    call curve25519_fe_is_u32
-    ret
-
-x25519_ladder_check_z3:
-    mov esi, x25519_z3
-    mov eax, 36
-    call curve25519_fe_is_u32
     ret
 
 x25519_ladder_loop_skeleton:

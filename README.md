@@ -22,8 +22,8 @@ The project is developed as a learning and research platform to explore how mode
 | SHA-256                     | ✅ Working      |
 | HMAC-SHA256                 | ✅ Working      |
 | RNG                         | ✅ Working      |
-| Curve25519 Field Arithmetic | 🚧 In Progress |
-| X25519                      | 🚧 In Progress |
+| Curve25519 Field Arithmetic | ✅ Working      |
+| X25519                      | ✅ Working      |
 | TLS                         | ⬜ Planned      |
 | Tor Link Protocol           | ⬜ Planned      |
 
@@ -71,7 +71,7 @@ The project is developed as a learning and research platform to explore how mode
 * Entropy collection
 * Pseudo-random number generation
 
-#### GhostCrypto v0.4 (Current Development)
+#### GhostCrypto v0.4
 
 ##### Curve25519 / X25519
 
@@ -85,21 +85,17 @@ Implemented:
 * Multiplication groundwork
 * Carry propagation
 * Reduction pipeline
-* Real reduction modulo 2²⁵⁵−19 (experimental)
+* Real reduction modulo 2²⁵⁵−19
 * Field squaring
+* Field inversion chain
 * Montgomery ladder initialization
 * Conditional swap (cswap)
 * Single ladder step implementation
-* 255-bit ladder loop skeleton
-* Public key generation skeleton
-* Shared secret generation skeleton
+* 255-bit ladder loop
+* Public key generation
+* Shared secret generation
+* RFC7748 validation
 * Deterministic testing infrastructure
-
-In Progress:
-
-* Full field arithmetic validation
-* Real inversion chain
-* RFC7748 compliance verification
 
 ---
 
@@ -109,19 +105,19 @@ GhostOS is currently in an experimental phase.
 
 The networking stack is functional for low-level communication testing.
 
-The cryptographic subsystem is actively evolving toward a complete implementation of X25519 and modern privacy-oriented protocols.
+The cryptographic subsystem now includes RFC7748-validated X25519 and is evolving toward HKDF-SHA256, TLS foundations, and privacy-oriented protocols.
 
 ---
 
 ## RFC References
 
-The X25519 implementation is being developed against the official test vectors defined in RFC 7748:
+The X25519 implementation has been validated against the official test vectors defined in RFC 7748:
 
 * RFC 7748 — Elliptic Curves for Security
 * Section 5.2 Test Vectors:
   https://datatracker.ietf.org/doc/html/rfc7748#section-5.2
 
-Current development focuses on matching the RFC7748 X25519 reference vectors before progressing to higher-level protocols.
+GhostOS now matches the RFC7748 X25519 public key and shared secret reference vectors. Current development can progress toward HKDF-SHA256 and higher-level protocols.
 
 ---
 
@@ -129,10 +125,10 @@ Current development focuses on matching the RFC7748 X25519 reference vectors bef
 
 ### Curve25519 / X25519
 
-* Real inversion chain
-* RFC7748 validation
-* Public key verification
-* Shared secret verification
+* ✅ Real inversion chain
+* ✅ RFC7748 validation
+* ✅ Public key verification
+* ✅ Shared secret verification
 * Constant-time refinements
 
 ### GhostTLS

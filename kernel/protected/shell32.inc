@@ -749,13 +749,29 @@ pm_print_stack:
     loop .line
     ret
 
-pm_banner db 'g',13,0
-pm_memory_prefix db 0
+pm_banner db 'ghost32',13,0
+pm_memory_prefix db 'mem ',0
 pm_memory_suffix db 13,0
 pm_heap_ready_msg db 13,0
 pm_prompt db 0
-pm_help_msg db 0
-pm_version_msg db 0
+pm_help_msg db \
+'Commands:',13,\
+'CORE: help cls clear echo version',13,\
+'MEM: mem heapinfo memmap pages',13,\
+'CRYPTO: sha256test hmacsha256test rngtest rfc7748test',13,\
+'PCI: lspci netdev regs stack uptime panic',13,\
+'NET: netup netstat netdiag netbar netreset netclear',13,\
+'MAC: mac setmac randommac',13,\
+'PING: pinggw ping pingtest pingdebug',13,\
+'UDP/TCP: udpsend udpstat tcpconnect tcpstat',13,\
+'ARP: pingfake arp arpfake arpstat',13,\
+'TX: txdemo txdump txreal txstatus',13,\
+'PKT: pktdump pktinfo',13,\
+'RX1: rxdump rxpoll rxpeek rxpacket rxipv4dump',13,\
+'RX2: rxkick rxdebug rxreset rxmode rxtest rxstatus',13,\
+'TASK: tasks yield',13,\
+'FS: ls cat browse run halt',13,0
+pm_version_msg db 'ghost32',13,0
 pm_unknown_msg db '?',13,0
 pm_halt_msg db 0
 pm_run_usage_msg db 'run GEX',13,0

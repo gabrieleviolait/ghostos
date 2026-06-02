@@ -35,7 +35,7 @@ BOOT_STACK_TOP         equ 0xF000
 KERNEL_SEG             equ 0x0000
 KERNEL_OFFSET          equ 0x1000
 KERNEL_LBA             equ 1
-KERNEL_SECTORS         equ 140
+KERNEL_SECTORS         equ 160
 
 SECTORS_PER_TRACK      equ 18
 HEADS                  equ 2

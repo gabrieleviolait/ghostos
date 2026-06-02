@@ -1123,6 +1123,8 @@ curve25519_fe_normalize:
     call .fold_bit255
     call .propagate_0_to_30
     call .conditional_sub_p
+    call .conditional_sub_p
+    call .conditional_sub_p
 
     popad
     ret

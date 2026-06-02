@@ -21,6 +21,7 @@ The project is developed as a learning and research platform to explore how mode
 | TCP Handshake               | ✅ Working      |
 | SHA-256                     | ✅ Working      |
 | HMAC-SHA256                 | ✅ Working      |
+| HKDF-SHA256                 | ✅ Working      |
 | RNG                         | ✅ Working      |
 | Curve25519 Field Arithmetic | ✅ Working      |
 | X25519                      | ✅ Working      |
@@ -97,6 +98,19 @@ Implemented:
 * RFC7748 validation
 * Deterministic testing infrastructure
 
+#### GhostCrypto v0.5
+
+##### HKDF-SHA256
+
+Implemented:
+
+* HKDF-Extract
+* HKDF-Expand
+* PRK derivation
+* OKM derivation
+* RFC5869 Test Case 1 validation
+* Deterministic PRK / OKM verification
+
 ---
 
 ## Development Status
@@ -105,7 +119,7 @@ GhostOS is currently in an experimental phase.
 
 The networking stack is functional for low-level communication testing.
 
-The cryptographic subsystem now includes RFC7748-validated X25519 and is evolving toward HKDF-SHA256, TLS foundations, and privacy-oriented protocols.
+The cryptographic subsystem now includes RFC7748-validated X25519 and RFC5869-validated HKDF-SHA256, and is evolving toward TLS foundations and privacy-oriented protocols.
 
 ---
 
@@ -117,7 +131,13 @@ The X25519 implementation has been validated against the official test vectors d
 * Section 5.2 Test Vectors:
   https://datatracker.ietf.org/doc/html/rfc7748#section-5.2
 
-GhostOS now matches the RFC7748 X25519 public key and shared secret reference vectors. Current development can progress toward HKDF-SHA256 and higher-level protocols.
+The HKDF-SHA256 implementation has been validated against RFC 5869 Test Case 1:
+
+* RFC 5869 — HMAC-based Extract-and-Expand Key Derivation Function
+* Test Case 1:
+  https://datatracker.ietf.org/doc/html/rfc5869#appendix-A.1
+
+GhostOS now matches the RFC7748 X25519 public key/shared secret reference vectors and the RFC5869 HKDF-SHA256 PRK/OKM reference vectors.
 
 ---
 
@@ -131,12 +151,19 @@ GhostOS now matches the RFC7748 X25519 public key and shared secret reference ve
 * ✅ Shared secret verification
 * Constant-time refinements
 
+### HKDF-SHA256
+
+* ✅ HKDF-Extract
+* ✅ HKDF-Expand
+* ✅ RFC5869 validation
+* ✅ PRK verification
+* ✅ OKM verification
+
 ### GhostTLS
 
-* HKDF-SHA256
+* TLS Key Schedule
 * TLS Record Layer
 * ClientHello
-* Key Schedule
 * Encrypted Records
 
 ### GhostTor
@@ -192,10 +219,9 @@ tcpstat
 
 sha256test
 hmacsha256test
+hkdfsha256test
 rngtest
-
-curve25519test
-x25519test
+rfc7748test
 ```
 
 ---

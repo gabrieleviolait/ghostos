@@ -749,26 +749,14 @@ pm_print_stack:
     loop .line
     ret
 
-pm_banner db 'Ghost OS v1.5-alpha ghost32',13,13,0
-pm_memory_prefix db 'Memory: ',0
-pm_memory_suffix db ' MB detected',13,0
-pm_heap_ready_msg db 'Heap initialized',13,0
+pm_banner db 'GhostOS ghost32',13,13,0
+pm_memory_prefix db 'Mem ',0
+pm_memory_suffix db ' MB',13,0
+pm_heap_ready_msg db 'Heap OK',13,0
 pm_prompt db 'ghost32> ',0
-pm_help_msg db \
-'Commands:',13,\
-'help cls clear echo version',13,\
-'mem heapinfo memmap pages',13,\
-'sha256test hmacsha256test rngtest',13,\
-'lspci netdev netup netstat netdiag netbar',13,\
-'mac setmac randommac',13,\
-'txdemo txdump pktdump pktinfo txstatus',13,\
-'pinggw ping pingtest pingdebug udpsend udpstat tcpconnect tcpstat pingfake arp arpfake arpstat txreal',13,\
-'rxdump netreset netclear rxpoll rxpeek rxpacket rxipv4dump rxkick rxdebug rxreset rxmode rxtest rxstatus',13,\
-'regs stack uptime panic',13,\
-'tasks yield',13,\
-'ls cat browse run halt',13,0
-pm_version_msg db 'Ghost OS v1.5.5-alpha',13,0
-pm_unknown_msg db 'Unknown command. Type help.',13,0
+pm_help_msg db 'help cls mem pingtest rfc7748test',13,0
+pm_version_msg db 'v1.5.5',13,0
+pm_unknown_msg db '?',13,0
 pm_halt_msg db 'System halted.',13,0
 pm_run_usage_msg db 'Usage: run HELLO.GEX [args]',13,0
 pm_uptime_msg db 'Uptime ticks: ',0

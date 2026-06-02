@@ -20,6 +20,9 @@ x25519_iza_msg db 'IZA',0
 x25519_u1x_msg db 'U1X',0
 x25519_u1z_msg db 'U1Z',0
 x25519_csb_msg db 'CSB',0
+x25519_u2d_msg db 'U2D',0
+x25519_u4d_msg db 'U4D',0
+x25519_u8d_msg db 'U8D',0
 x25519_rfc_shared_msg db 'S',0
 x25519_rfc_shared_abba_msg db 'ABBA',0
 x25519_scalar_a_msg db 'SA',0
@@ -74,6 +77,18 @@ x25519_ub_run1 times 32 db 0
 x25519_ub_run2 times 32 db 0
 x25519_u1_expected_x times 32 db 0
 x25519_u1_expected_z times 32 db 0
+x25519_u2_x_run1 times 32 db 0
+x25519_u2_z_run1 times 32 db 0
+x25519_u2_x_run2 times 32 db 0
+x25519_u2_z_run2 times 32 db 0
+x25519_u4_x_run1 times 32 db 0
+x25519_u4_z_run1 times 32 db 0
+x25519_u4_x_run2 times 32 db 0
+x25519_u4_z_run2 times 32 db 0
+x25519_u8_x_run1 times 32 db 0
+x25519_u8_z_run1 times 32 db 0
+x25519_u8_x_run2 times 32 db 0
+x25519_u8_z_run2 times 32 db 0
 curve25519_fe_a times 32 db 0
 curve25519_fe_b times 32 db 0
 curve25519_fe_out times 32 db 0
@@ -535,6 +550,178 @@ x25519_rfc7748_validate:
 
 .csb_done:
     mov esi, x25519_csb_msg
+    call x25519_rfc7748_print_result
+
+    ; U2D: two manual ladder steps with BobPublic are deterministic on x2/z2
+
+    ; run 1
+    call x25519_ladder_init
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_x1
+    call curve25519_fe_copy
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_x3
+    call curve25519_fe_copy
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+
+    mov esi, x25519_x2
+    mov edi, x25519_u2_x_run1
+    call curve25519_fe_copy
+    mov esi, x25519_z2
+    mov edi, x25519_u2_z_run1
+    call curve25519_fe_copy
+
+    ; run 2
+    call x25519_ladder_init
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_x1
+    call curve25519_fe_copy
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_x3
+    call curve25519_fe_copy
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+
+    mov esi, x25519_x2
+    mov edi, x25519_u2_x_run2
+    call curve25519_fe_copy
+    mov esi, x25519_z2
+    mov edi, x25519_u2_z_run2
+    call curve25519_fe_copy
+
+    mov esi, x25519_u2_x_run1
+    mov edi, x25519_u2_x_run2
+    call curve25519_memcmp32
+    cmp eax, 1
+    jne .u2d_done
+
+    mov esi, x25519_u2_z_run1
+    mov edi, x25519_u2_z_run2
+    call curve25519_memcmp32
+
+.u2d_done:
+    mov esi, x25519_u2d_msg
+    call x25519_rfc7748_print_result
+
+    ; U4D: four manual ladder steps with BobPublic are deterministic on x2/z2
+
+    ; run 1
+    call x25519_ladder_init
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_x1
+    call curve25519_fe_copy
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_x3
+    call curve25519_fe_copy
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+
+    mov esi, x25519_x2
+    mov edi, x25519_u4_x_run1
+    call curve25519_fe_copy
+    mov esi, x25519_z2
+    mov edi, x25519_u4_z_run1
+    call curve25519_fe_copy
+
+    ; run 2
+    call x25519_ladder_init
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_x1
+    call curve25519_fe_copy
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_x3
+    call curve25519_fe_copy
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+
+    mov esi, x25519_x2
+    mov edi, x25519_u4_x_run2
+    call curve25519_fe_copy
+    mov esi, x25519_z2
+    mov edi, x25519_u4_z_run2
+    call curve25519_fe_copy
+
+    mov esi, x25519_u4_x_run1
+    mov edi, x25519_u4_x_run2
+    call curve25519_memcmp32
+    cmp eax, 1
+    jne .u4d_done
+
+    mov esi, x25519_u4_z_run1
+    mov edi, x25519_u4_z_run2
+    call curve25519_memcmp32
+
+.u4d_done:
+    mov esi, x25519_u4d_msg
+    call x25519_rfc7748_print_result
+
+    ; U8D: eight manual ladder steps with BobPublic are deterministic on x2/z2
+
+    ; run 1
+    call x25519_ladder_init
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_x1
+    call curve25519_fe_copy
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_x3
+    call curve25519_fe_copy
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+
+    mov esi, x25519_x2
+    mov edi, x25519_u8_x_run1
+    call curve25519_fe_copy
+    mov esi, x25519_z2
+    mov edi, x25519_u8_z_run1
+    call curve25519_fe_copy
+
+    ; run 2
+    call x25519_ladder_init
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_x1
+    call curve25519_fe_copy
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_x3
+    call curve25519_fe_copy
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+    call x25519_ladder_step_once
+
+    mov esi, x25519_x2
+    mov edi, x25519_u8_x_run2
+    call curve25519_fe_copy
+    mov esi, x25519_z2
+    mov edi, x25519_u8_z_run2
+    call curve25519_fe_copy
+
+    mov esi, x25519_u8_x_run1
+    mov edi, x25519_u8_x_run2
+    call curve25519_memcmp32
+    cmp eax, 1
+    jne .u8d_done
+
+    mov esi, x25519_u8_z_run1
+    mov edi, x25519_u8_z_run2
+    call curve25519_memcmp32
+
+.u8d_done:
+    mov esi, x25519_u8d_msg
     call x25519_rfc7748_print_result
 
     mov esi, x25519_shared_secret

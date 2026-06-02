@@ -470,7 +470,7 @@ pm_do_rngtest:
     jmp shell32_loop
 
 pm_do_rfc7748test:
-    call x25519_rfc7748_validate
+    call x25519_rfc7748_validate_min
     jmp shell32_loop
 
 pm_do_netbar:

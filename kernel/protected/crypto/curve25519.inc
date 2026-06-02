@@ -208,6 +208,100 @@ x25519_generate_shared_secret_skeleton:
     popad
     ret
 
+x25519_rfc7748_validate_min:
+    pushad
+
+    mov byte [x25519_rfc_fail_flag], 0
+
+    ; A: Alice private -> Alice public
+    mov esi, x25519_rfc7748_alice_private
+    mov edi, curve25519_private_key
+    call curve25519_fe_copy
+    call curve25519_clamp_private
+    call x25519_ladder_init
+    call x25519_generate_public_skeleton
+    mov esi, curve25519_public_key
+    mov edi, x25519_rfc7748_alice_public
+    call curve25519_memcmp32
+    mov esi, x25519_rfc_alice_msg
+    call x25519_rfc7748_print_result
+
+    ; B: Bob private -> Bob public
+    mov esi, x25519_rfc7748_bob_private
+    mov edi, curve25519_private_key
+    call curve25519_fe_copy
+    call curve25519_clamp_private
+    call x25519_ladder_init
+    call x25519_generate_public_skeleton
+    mov esi, curve25519_public_key
+    mov edi, x25519_rfc7748_bob_public
+    call curve25519_memcmp32
+    mov esi, x25519_rfc_bob_msg
+    call x25519_rfc7748_print_result
+
+    ; AB: Alice private * Bob public -> shared
+    mov esi, x25519_rfc7748_alice_private
+    mov edi, curve25519_private_key
+    call curve25519_fe_copy
+    call curve25519_clamp_private
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_peer_public_key
+    call curve25519_fe_copy
+    call x25519_generate_shared_secret_skeleton
+    mov esi, x25519_shared_secret
+    mov edi, x25519_shared_ab
+    call curve25519_fe_copy
+    mov esi, x25519_shared_ab
+    mov edi, x25519_rfc7748_shared
+    call curve25519_memcmp32
+    mov esi, x25519_rfc_shared_ab_msg
+    call x25519_rfc7748_print_result
+
+    ; BA: Bob private * Alice public -> shared
+    mov esi, x25519_rfc7748_bob_private
+    mov edi, curve25519_private_key
+    call curve25519_fe_copy
+    call curve25519_clamp_private
+    mov esi, x25519_rfc7748_alice_public
+    mov edi, x25519_peer_public_key
+    call curve25519_fe_copy
+    call x25519_generate_shared_secret_skeleton
+    mov esi, x25519_shared_secret
+    mov edi, x25519_shared_ba
+    call curve25519_fe_copy
+    mov esi, x25519_shared_ba
+    mov edi, x25519_rfc7748_shared
+    call curve25519_memcmp32
+    mov esi, x25519_rfc_shared_ba_msg
+    call x25519_rfc7748_print_result
+
+    ; S: AB == BA and AB == expected
+    mov esi, x25519_shared_ab
+    mov edi, x25519_shared_ba
+    call curve25519_memcmp32
+    cmp eax, 1
+    jne .print_s
+    mov esi, x25519_shared_ab
+    mov edi, x25519_rfc7748_shared
+    call curve25519_memcmp32
+
+.print_s:
+    mov esi, x25519_rfc_shared_msg
+    call x25519_rfc7748_print_result
+
+    ; R: final aggregate result
+    mov eax, 1
+    cmp byte [x25519_rfc_fail_flag], 0
+    je .print_r
+    xor eax, eax
+
+.print_r:
+    mov esi, x25519_rfc_final_msg
+    call x25519_rfc7748_print_result
+
+    popad
+    ret
+
 x25519_rfc7748_validate:
     pushad
 

@@ -30,18 +30,6 @@ curve25519test:
     mov edx, curve25519_fe_out
     call curve25519_fe_mul
 
-    mov esi, curve25519_reduce_before_msg
-    call pm_print_string
-    mov esi, curve25519_fe_b
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov esi, curve25519_reduce_after_msg
-    call pm_print_string
-    mov esi, curve25519_fe_out
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
     mov esi, curve25519_fe_out
     mov ecx, 32
     call rtl8139_dump_bytes
@@ -204,8 +192,6 @@ x25519test:
     ret
 
 curve25519_test_msg db 'GhostCrypto Curve25519 stub',13,0
-curve25519_reduce_before_msg db 'before reduce_real = ',0
-curve25519_reduce_after_msg db 'after reduce_real = ',0
 x25519_test_msg db 'GhostCrypto X25519 ladder loop skeleton',13,0
 x25519_loop_count_msg db 'loop_count = ',0
 x25519_last_bit_msg db 'last_bit = ',0
@@ -215,7 +201,6 @@ x25519_inversion_result_msg db 'inversion result = ',0
 x25519_public_key_msg db 'public key = ',0
 x25519_shared_secret_msg db 'shared secret = ',0
 x25519_rfc7748_pending_msg db 'RFC7748 validation pending',13,0
-x25519_x1_msg db 'x1 = ',0
 x25519_x2_msg db 'x2 = ',0
 x25519_z2_msg db 'z2 = ',0
 x25519_x3_msg db 'x3 = ',0

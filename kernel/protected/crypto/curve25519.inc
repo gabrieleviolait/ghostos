@@ -118,6 +118,10 @@ x25519test:
 
     call x25519_generate_public_skeleton
 
+    mov esi, x25519_rfc7748_u_coordinate
+    mov edi, x25519_peer_public_key
+    call curve25519_fe_copy
+
     mov esi, x25519_loop_count_msg
     call pm_print_string
     mov eax, [x25519_loop_count]
@@ -174,6 +178,17 @@ x25519test:
     mov ecx, 32
     call rtl8139_dump_bytes
 
+    call x25519_generate_shared_secret_skeleton
+
+    mov esi, x25519_shared_secret_msg
+    call pm_print_string
+    mov esi, x25519_shared_secret
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
+    mov esi, x25519_rfc7748_pending_msg
+    call pm_print_string
+
     ret
 
 curve25519_test_msg db 'GhostCrypto Curve25519 stub',13,0
@@ -189,6 +204,8 @@ x25519_swap_state_msg db 'swap_state = ',0
 x25519_final_state_msg db 'final ladder state',13,0
 x25519_inversion_result_msg db 'inversion result = ',0
 x25519_public_key_msg db 'public key = ',0
+x25519_shared_secret_msg db 'shared secret = ',0
+x25519_rfc7748_pending_msg db 'RFC7748 validation pending',13,0
 x25519_x1_msg db 'x1 = ',0
 x25519_x2_msg db 'x2 = ',0
 x25519_z2_msg db 'z2 = ',0
@@ -201,8 +218,27 @@ x25519_test_scalar:
     db 11h, 12h, 13h, 14h, 15h, 16h, 17h, 18h
     db 19h, 1Ah, 1Bh, 1Ch, 1Dh, 1Eh, 1Fh, 20h
 
+; RFC7748 section 5.2 X25519 test vector data, stored for plumbing only.
+; Validation is intentionally pending until full inversion/reduction exist.
+x25519_rfc7748_scalar:
+    db 0A5h, 046h, 0E3h, 06Bh, 0F0h, 052h, 07Ch, 09Dh
+    db 03Bh, 016h, 015h, 04Bh, 082h, 046h, 05Eh, 0DDh
+    db 062h, 014h, 04Ch, 00Ah, 0C1h, 0FCh, 05Ah, 018h
+    db 050h, 06Ah, 022h, 044h, 0BAh, 044h, 09Ah, 0C4h
+
+x25519_rfc7748_u_coordinate:
+    db 0E6h, 0DBh, 068h, 067h, 058h, 030h, 030h, 0DBh
+    db 035h, 094h, 0C1h, 0A4h, 024h, 0B1h, 05Fh, 07Ch
+    db 072h, 066h, 024h, 0ECh, 026h, 0B3h, 035h, 03Bh
+    db 010h, 0A9h, 003h, 0A6h, 0D0h, 0ABh, 01Ch, 04Ch
+
+; Expected output placeholder/comment:
+; c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552
+
 curve25519_private_key times 32 db 0
 curve25519_public_key  times 32 db 0
+x25519_peer_public_key times 32 db 0
+x25519_shared_secret times 32 db 0
 curve25519_fe_a times 32 db 0
 curve25519_fe_b times 32 db 0
 curve25519_fe_out times 32 db 0
@@ -278,6 +314,33 @@ x25519_generate_public_skeleton:
     mov esi, x25519_x2
     mov edi, curve25519_fe_out
     mov edx, curve25519_public_key
+    call curve25519_fe_mul
+
+    popad
+    ret
+
+x25519_generate_shared_secret_skeleton:
+    pushad
+
+    call x25519_ladder_init
+
+    mov esi, x25519_peer_public_key
+    mov edi, x25519_x1
+    call curve25519_fe_copy
+
+    mov esi, x25519_peer_public_key
+    mov edi, x25519_x3
+    call curve25519_fe_copy
+
+    call x25519_ladder_loop_skeleton
+
+    mov esi, x25519_z2
+    mov edi, curve25519_fe_out
+    call curve25519_fe_invert
+
+    mov esi, x25519_x2
+    mov edi, curve25519_fe_out
+    mov edx, x25519_shared_secret
     call curve25519_fe_mul
 
     popad

@@ -30,6 +30,18 @@ curve25519test:
     mov edx, curve25519_fe_out
     call curve25519_fe_mul
 
+    mov esi, curve25519_reduce_before_msg
+    call pm_print_string
+    mov esi, curve25519_fe_b
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
+    mov esi, curve25519_reduce_after_msg
+    call pm_print_string
+    mov esi, curve25519_fe_out
+    mov ecx, 32
+    call rtl8139_dump_bytes
+
     mov esi, curve25519_fe_out
     mov ecx, 32
     call rtl8139_dump_bytes
@@ -192,12 +204,9 @@ x25519test:
     ret
 
 curve25519_test_msg db 'GhostCrypto Curve25519 stub',13,0
+curve25519_reduce_before_msg db 'before reduce_real = ',0
+curve25519_reduce_after_msg db 'after reduce_real = ',0
 x25519_test_msg db 'GhostCrypto X25519 ladder loop skeleton',13,0
-x25519_before_step_msg db 'before step',13,0
-x25519_after_step_msg db 'after step',13,0
-x25519_before_cswap_msg db 'before cswap',13,0
-x25519_after_cswap_msg db 'after cswap',13,0
-x25519_restored_cswap_msg db 'restored cswap',13,0
 x25519_loop_count_msg db 'loop_count = ',0
 x25519_last_bit_msg db 'last_bit = ',0
 x25519_swap_state_msg db 'swap_state = ',0
@@ -242,7 +251,7 @@ x25519_shared_secret times 32 db 0
 curve25519_fe_a times 32 db 0
 curve25519_fe_b times 32 db 0
 curve25519_fe_out times 32 db 0
-curve25519_mul_temp times 64 dw 0
+curve25519_mul_temp times 32 dd 0
 curve25519_mul_out_ptr dd 0
 curve25519_mul_small_const times 32 db 0
 x25519_x1 times 32 db 0
@@ -732,19 +741,18 @@ curve25519_fe_mul:
     ; ESI = a
     ; EDI = b
     ; EDX = out
-    ; early schoolbook multiplication with 16-bit temp slots
-    ; NOT final Curve25519 reduction yet
+    ; schoolbook multiplication with high coefficients folded into 32 dword slots
 
     pushad
     mov [curve25519_mul_out_ptr], edx
 
-    ; zero 64 words = 128 bytes
-    mov ecx, 64
+    ; zero 32 dwords = 128 bytes
+    mov ecx, 32
     mov ebp, curve25519_mul_temp
 
 .zero:
-    mov word [ebp], 0
-    add ebp, 2
+    mov dword [ebp], 0
+    add ebp, 4
     dec ecx
     jnz .zero
 
@@ -763,17 +771,21 @@ curve25519_fe_mul:
     mov al, [esi + ebx]
     mov dl, [edi + ecx]
     mul dl                 ; AX = AL * DL
-    mov dx, ax             ; save product
+    movzx edx, ax          ; save product
 
-    mov ebp, curve25519_mul_temp
     mov eax, ebx
     add eax, ecx
-    shl eax, 1             ; word index
+    cmp eax, 32
+    jb .add_product
+    sub eax, 32
+    imul edx, 38           ; 2^256 == 38 mod (2^255 - 19)
+
+.add_product:
+    mov ebp, curve25519_mul_temp
+    shl eax, 2             ; dword index
     add ebp, eax
 
-    mov ax, [ebp]
-    add ax, dx
-    mov [ebp], ax
+    add [ebp], edx
 
     inc ecx
     jmp .inner
@@ -784,19 +796,21 @@ curve25519_fe_mul:
 
 .done:
     call curve25519_mul_fold_carry
-    call curve25519_fe_reduce
-    call curve25519_mul_fold_carry
+    mov edi, curve25519_fe_b
+    call curve25519_mul_temp_copy_low32
+    call curve25519_fe_reduce_real
+    call curve25519_fe_normalize
 
-    ; copy low byte of first 32 word slots to out
+    ; copy low byte of first 32 dword slots to out
     mov esi, curve25519_mul_temp
     mov edi, [curve25519_mul_out_ptr]
     mov ecx, 32
 
 .copy:
-    mov ax, [esi]
+    mov eax, [esi]
     mov [edi], al
 
-    add esi, 2
+    add esi, 4
     inc edi
 
     dec ecx
@@ -806,31 +820,56 @@ curve25519_fe_mul:
     ret
 
 curve25519_mul_fold_carry:
-    ; folds byte carries across 64 word slots in curve25519_mul_temp
+    ; folds byte carries across 32 dword slots in curve25519_mul_temp
 
     push eax
     push ecx
     push edx
     push ebp
 
-    mov ecx, 63
+    mov ecx, 31
     mov ebp, curve25519_mul_temp
 
 .fold:
-    mov ax, [ebp]
-    mov dx, ax
-    and ax, 00FFh
-    mov [ebp], ax
+    mov eax, [ebp]
+    mov edx, eax
+    and eax, 000000FFh
+    mov [ebp], eax
 
-    shr dx, 8
-    add [ebp + 2], dx
+    shr edx, 8
+    add [ebp + 4], edx
 
-    add ebp, 2
+    add ebp, 4
     dec ecx
     jnz .fold
 
     pop ebp
     pop edx
+    pop ecx
+    pop eax
+    ret
+
+curve25519_mul_temp_copy_low32:
+    ; EDI = 32-byte output buffer
+
+    push eax
+    push ecx
+    push esi
+    push edi
+
+    mov esi, curve25519_mul_temp
+    mov ecx, 32
+
+.copy:
+    mov eax, [esi]
+    mov [edi], al
+    add esi, 4
+    inc edi
+    dec ecx
+    jnz .copy
+
+    pop edi
+    pop esi
     pop ecx
     pop eax
     ret
@@ -847,33 +886,161 @@ curve25519_fe_square:
     pop edi
     ret
 
-curve25519_fe_reduce:
-    ; very early pseudo reduction
-    ; folds temp[32..63] back into temp[0..31] * 19
+curve25519_fe_reduce_real:
+    ; p = 2^255 - 19, so 2^255 == 19 mod p.
+    ; High byte coefficients were folded during accumulation as 2^256 == 38.
+    ; This pass folds the remaining bit 255 from byte 31 into byte 0 as *19.
 
     pushad
 
-    mov ecx, 32
-    mov esi, curve25519_mul_temp
-    add esi, 64          ; upper word slots: temp[32]
-
-    mov edi, curve25519_mul_temp
-
-.loop:
-    mov ax, [esi]
-    mov bx, 19
-    mul bx               ; DX:AX = upper word * 19
-
-    add [edi], ax
-    mov word [esi], 0
-
-    add esi, 2
-    add edi, 2
-
-    dec ecx
-    jnz .loop
+    mov ebp, curve25519_mul_temp + 31*4
+    mov eax, [ebp]
+    mov edx, eax
+    and eax, 0000007Fh
+    mov [ebp], eax
+    shr edx, 7
+    imul edx, 19
+    add [curve25519_mul_temp], edx
 
     popad
+    ret
+
+curve25519_fe_normalize:
+    ; Normalize low 255 bits in curve25519_mul_temp.
+
+    pushad
+
+    call .propagate_0_to_30
+    call .fold_bit255
+    call .propagate_0_to_30
+    call .fold_bit255
+    call .propagate_0_to_30
+    call .conditional_sub_p
+
+    popad
+    ret
+
+.propagate_0_to_30:
+    push eax
+    push ecx
+    push edx
+    push ebp
+
+    mov ecx, 31
+    mov ebp, curve25519_mul_temp
+
+.prop_loop:
+    mov eax, [ebp]
+    mov edx, eax
+    and eax, 000000FFh
+    mov [ebp], eax
+    shr edx, 8
+    add [ebp + 4], edx
+    add ebp, 4
+    dec ecx
+    jnz .prop_loop
+
+    pop ebp
+    pop edx
+    pop ecx
+    pop eax
+    ret
+
+.fold_bit255:
+    push eax
+    push edx
+    push ebp
+
+    mov ebp, curve25519_mul_temp + 31*4
+    mov eax, [ebp]
+    mov edx, eax
+    and eax, 0000007Fh
+    mov [ebp], eax
+    shr edx, 7
+    imul edx, 19
+    add [curve25519_mul_temp], edx
+
+    pop ebp
+    pop edx
+    pop eax
+    ret
+
+.conditional_sub_p:
+    push eax
+    push ebx
+    push ecx
+    push edx
+    push ebp
+
+    mov ebp, curve25519_mul_temp + 31*4
+    mov ecx, 31
+
+.cmp_loop:
+    mov eax, [ebp]
+    mov edx, 255
+    cmp ecx, 31
+    jne .cmp_not_top
+    mov edx, 127
+
+.cmp_not_top:
+    cmp ecx, 0
+    jne .cmp_slot
+    mov edx, 237
+
+.cmp_slot:
+    cmp eax, edx
+    ja .do_subtract
+    jb .done_conditional
+
+    sub ebp, 4
+    dec ecx
+    jns .cmp_loop
+    jmp .do_subtract
+
+.do_subtract:
+    xor ebx, ebx
+    mov ebp, curve25519_mul_temp
+
+    mov eax, [ebp]
+    sub eax, 237
+    call .finish_sub_limb
+    mov [ebp], eax
+    add ebp, 4
+
+    mov ecx, 30
+
+.sub_mid:
+    mov eax, [ebp]
+    sub eax, 255
+    sub eax, ebx
+    call .finish_sub_limb
+    mov [ebp], eax
+    add ebp, 4
+    dec ecx
+    jnz .sub_mid
+
+    mov eax, [ebp]
+    sub eax, 127
+    sub eax, ebx
+    call .finish_sub_limb
+    mov [ebp], eax
+
+.done_conditional:
+    pop ebp
+    pop edx
+    pop ecx
+    pop ebx
+    pop eax
+    ret
+
+.finish_sub_limb:
+    xor ebx, ebx
+    test eax, 80000000h
+    jz .finish_no_borrow
+    add eax, 256
+    mov ebx, 1
+
+.finish_no_borrow:
     ret
 
 curve25519_fe_zero:

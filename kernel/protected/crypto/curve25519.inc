@@ -3,58 +3,21 @@
 ; v0.4 skeleton
 ; ============================================================
 
-curve25519test:
-    call curve25519_load_test_scalar
-
-    mov esi, curve25519_test_msg
-    call pm_print_string
-
-    mov esi, curve25519_private_key
-    mov edi, curve25519_private_key
-    mov edx, curve25519_fe_out
-    call curve25519_fe_mul
-
-    mov esi, curve25519_fe_out
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    ret
-
-x25519test:
-    call curve25519_load_test_scalar
-    call x25519_ladder_init
-
-    mov esi, x25519_test_msg
-    call pm_print_string
-
-    call x25519_generate_public_skeleton
-
-    mov esi, x25519_rfc7748_bob_public
-    mov edi, x25519_peer_public_key
-    call curve25519_fe_copy
-
-    call x25519_generate_shared_secret_skeleton
-
-    mov esi, x25519_rfc7748_pending_msg
-    call pm_print_string
-
-    ret
-
-curve25519_test_msg db 'GhostCrypto Curve25519 stub',13,0
-x25519_test_msg db 'GhostCrypto X25519 ladder loop skeleton',13,0
-x25519_rfc7748_pending_msg db 'RFC7748 validation pending',13,0
 x25519_rfc_alice_msg db 'Alice PK: ',0
 x25519_rfc_bob_msg db 'Bob PK: ',0
 x25519_rfc_shared_msg db 'Shared: ',0
 x25519_rfc_final_msg db 'RFC7748: ',0
 x25519_rfc_pass_msg db 'PASS',13,0
 x25519_rfc_fail_msg db 'FAIL',13,0
-
-x25519_test_scalar:
-    db 01h, 02h, 03h, 04h, 05h, 06h, 07h, 08h
-    db 09h, 0Ah, 0Bh, 0Ch, 0Dh, 0Eh, 0Fh, 10h
-    db 11h, 12h, 13h, 14h, 15h, 16h, 17h, 18h
-    db 19h, 1Ah, 1Bh, 1Ch, 1Dh, 1Eh, 1Fh, 20h
+x25519_rfc_ac_msg db 'A comp ',0
+x25519_rfc_ae_msg db 'A exp ',0
+x25519_rfc_bc_msg db 'B comp ',0
+x25519_rfc_be_msg db 'B exp ',0
+x25519_rfc_sc_msg db 'S comp ',0
+x25519_rfc_se_msg db 'S exp ',0
+x25519_rfc_clamp_msg db 'A clamp ',0
+x25519_rfc_base_msg db 'Base ',0
+x25519_rfc_u_msg db 'Bob u LE = ',0
 
 ; RFC7748 section 5.2 X25519 test vectors.
 x25519_rfc7748_alice_private:
@@ -208,8 +171,20 @@ x25519_rfc7748_validate:
     mov edi, curve25519_private_key
     call curve25519_fe_copy
     call curve25519_clamp_private
+    mov esi, x25519_rfc_clamp_msg
+    mov edi, curve25519_private_key
+    call x25519_rfc7748_dump32
+    mov esi, x25519_rfc_base_msg
+    mov edi, curve25519_basepoint
+    call x25519_rfc7748_dump32
     call x25519_ladder_init
     call x25519_generate_public_skeleton
+    mov esi, x25519_rfc_ac_msg
+    mov edi, curve25519_public_key
+    call x25519_rfc7748_dump32
+    mov esi, x25519_rfc_ae_msg
+    mov edi, x25519_rfc7748_alice_public
+    call x25519_rfc7748_dump32
     mov esi, curve25519_public_key
     mov edi, x25519_rfc7748_alice_public
     call curve25519_memcmp32
@@ -222,6 +197,12 @@ x25519_rfc7748_validate:
     call curve25519_clamp_private
     call x25519_ladder_init
     call x25519_generate_public_skeleton
+    mov esi, x25519_rfc_bc_msg
+    mov edi, curve25519_public_key
+    call x25519_rfc7748_dump32
+    mov esi, x25519_rfc_be_msg
+    mov edi, x25519_rfc7748_bob_public
+    call x25519_rfc7748_dump32
     mov esi, curve25519_public_key
     mov edi, x25519_rfc7748_bob_public
     call curve25519_memcmp32
@@ -235,7 +216,16 @@ x25519_rfc7748_validate:
     mov esi, x25519_rfc7748_bob_public
     mov edi, x25519_peer_public_key
     call curve25519_fe_copy
+    mov esi, x25519_rfc_u_msg
+    mov edi, x25519_peer_public_key
+    call x25519_rfc7748_dump32
     call x25519_generate_shared_secret_skeleton
+    mov esi, x25519_rfc_sc_msg
+    mov edi, x25519_shared_secret
+    call x25519_rfc7748_dump32
+    mov esi, x25519_rfc_se_msg
+    mov edi, x25519_rfc7748_shared
+    call x25519_rfc7748_dump32
     mov esi, x25519_shared_secret
     mov edi, x25519_rfc7748_shared
     call curve25519_memcmp32
@@ -268,6 +258,13 @@ x25519_rfc7748_print_result:
 .pass:
     mov esi, x25519_rfc_pass_msg
     call pm_print_string
+    ret
+
+x25519_rfc7748_dump32:
+    call pm_print_string
+    mov esi, edi
+    mov ecx, 32
+    call rtl8139_dump_bytes
     ret
 
 x25519_ladder_loop_skeleton:
@@ -437,7 +434,7 @@ curve25519_load_test_scalar:
     push esi
     push edi
 
-    mov esi, x25519_test_scalar
+    mov esi, x25519_rfc7748_alice_private
     mov edi, curve25519_private_key
     call curve25519_fe_copy
 

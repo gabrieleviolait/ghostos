@@ -145,14 +145,6 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_rngtest
 
-    mov edi, pm_cmd_curve25519test
-    call pm_starts_with_word
-    jc pm_do_curve25519test
-
-    mov edi, pm_cmd_x25519test
-    call pm_starts_with_word
-    jc pm_do_x25519test
-
     mov edi, pm_cmd_rfc7748test
     call pm_starts_with_word
     jc pm_do_rfc7748test
@@ -477,14 +469,6 @@ pm_do_rngtest:
     call rngtest
     jmp shell32_loop
 
-pm_do_curve25519test:
-    call curve25519test
-    jmp shell32_loop
-
-pm_do_x25519test:
-    call x25519test
-    jmp shell32_loop
-
 pm_do_rfc7748test:
     call x25519_rfc7748_validate
     jmp shell32_loop
@@ -774,7 +758,7 @@ pm_help_msg db \
 'Commands:',13,\
 'help cls clear echo version',13,\
 'mem heapinfo memmap pages',13,\
-'sha256test hmacsha256test rngtest curve25519test x25519test',13,\
+'sha256test hmacsha256test rngtest rfc7748test',13,\
 'lspci netdev netup netstat netdiag netbar',13,\
 'mac setmac randommac',13,\
 'txdemo txdump pktdump pktinfo txstatus',13,\
@@ -829,8 +813,6 @@ pm_cmd_netdev db 'netdev',0
 pm_cmd_sha256test db 'sha256test',0
 cmd_hmacsha256test db 'hmacsha256test',0
 pm_cmd_rngtest db 'rngtest',0
-pm_cmd_curve25519test db 'curve25519test',0
-pm_cmd_x25519test db 'x25519test',0
 pm_cmd_rfc7748test db 'rfc7748test',0
 pm_cmd_netbar db 'netbar',0
 pm_cmd_netup db 'netup',0

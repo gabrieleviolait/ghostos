@@ -14,6 +14,12 @@ x25519_ubd_msg db 'UBD',0
 x25519_fp_msg db 'FP',0
 x25519_f1p_msg db 'F1P',0
 x25519_b9_msg db 'B9',0
+x25519_fia_msg db 'FIA',0
+x25519_fib_msg db 'FIB',0
+x25519_iza_msg db 'IZA',0
+x25519_u1x_msg db 'U1X',0
+x25519_u1z_msg db 'U1Z',0
+x25519_csb_msg db 'CSB',0
 x25519_rfc_shared_msg db 'S',0
 x25519_rfc_shared_abba_msg db 'ABBA',0
 x25519_scalar_a_msg db 'SA',0
@@ -66,6 +72,8 @@ x25519_u5_run1 times 32 db 0
 x25519_u5_run2 times 32 db 0
 x25519_ub_run1 times 32 db 0
 x25519_ub_run2 times 32 db 0
+x25519_u1_expected_x times 32 db 0
+x25519_u1_expected_z times 32 db 0
 curve25519_fe_a times 32 db 0
 curve25519_fe_b times 32 db 0
 curve25519_fe_out times 32 db 0
@@ -384,6 +392,38 @@ x25519_rfc7748_validate:
     mov esi, x25519_b9_msg
     call x25519_rfc7748_print_result
 
+    ; FIA: AlicePublic * inv(AlicePublic) == 1
+    mov esi, x25519_rfc7748_alice_public
+    mov edi, curve25519_fe_out
+    call curve25519_fe_invert
+
+    mov esi, x25519_rfc7748_alice_public
+    mov edi, curve25519_fe_out
+    mov edx, x25519_tmp0
+    call curve25519_fe_mul
+
+    mov esi, x25519_tmp0
+    mov al, 1
+    call curve25519_fe_is_small
+    mov esi, x25519_fia_msg
+    call x25519_rfc7748_print_result
+
+    ; FIB: BobPublic * inv(BobPublic) == 1
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, curve25519_fe_out
+    call curve25519_fe_invert
+
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, curve25519_fe_out
+    mov edx, x25519_tmp0
+    call curve25519_fe_mul
+
+    mov esi, x25519_tmp0
+    mov al, 1
+    call curve25519_fe_is_small
+    mov esi, x25519_fib_msg
+    call x25519_rfc7748_print_result
+
     mov esi, x25519_rfc7748_bob_public
     call x25519_check_shared_init
     mov esi, x25519_shared_init_msg
@@ -405,6 +445,98 @@ x25519_rfc7748_validate:
     call curve25519_memcmp32
     mov esi, x25519_x1b_msg
     call x25519_rfc7748_print_result
+
+    ; IZA: z2_AB * inv(z2_AB) == 1
+    mov esi, x25519_z2
+    mov edi, curve25519_fe_out
+    call curve25519_fe_invert
+
+    mov esi, x25519_z2
+    mov edi, curve25519_fe_out
+    mov edx, x25519_tmp0
+    call curve25519_fe_mul
+
+    mov esi, x25519_tmp0
+    mov al, 1
+    call curve25519_fe_is_small
+    mov esi, x25519_iza_msg
+    call x25519_rfc7748_print_result
+
+    ; U1B: first ladder step with x1 = BobPublic
+    ; expected x3 = 4*x1^2, expected z3 = 4*x1
+
+    ; expected_x = 4 * BobPublic^2
+    mov esi, x25519_rfc7748_bob_public
+    mov edx, x25519_tmp0
+    call curve25519_fe_square
+
+    mov esi, x25519_tmp0
+    mov eax, 4
+    mov edx, x25519_u1_expected_x
+    call curve25519_fe_mul_small
+
+    ; expected_z = 4 * BobPublic
+    mov esi, x25519_rfc7748_bob_public
+    mov eax, 4
+    mov edx, x25519_u1_expected_z
+    call curve25519_fe_mul_small
+
+    ; init ladder state with x1/x3 = BobPublic
+    call x25519_ladder_init
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_x1
+    call curve25519_fe_copy
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_x3
+    call curve25519_fe_copy
+
+    call x25519_ladder_step_once
+
+    mov esi, x25519_x3
+    mov edi, x25519_u1_expected_x
+    call curve25519_memcmp32
+    mov esi, x25519_u1x_msg
+    call x25519_rfc7748_print_result
+
+    mov esi, x25519_z3
+    mov edi, x25519_u1_expected_z
+    call curve25519_memcmp32
+    mov esi, x25519_u1z_msg
+    call x25519_rfc7748_print_result
+
+    ; CSB: cswap large buffers, swap and restore
+    mov esi, x25519_rfc7748_alice_public
+    mov edi, x25519_tmp0
+    call curve25519_fe_copy
+
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_tmp1
+    call curve25519_fe_copy
+
+    mov al, 1
+    mov esi, x25519_tmp0
+    mov edi, x25519_tmp1
+    call curve25519_fe_cswap
+
+    mov al, 1
+    mov esi, x25519_tmp0
+    mov edi, x25519_tmp1
+    call curve25519_fe_cswap
+
+    mov esi, x25519_tmp0
+    mov edi, x25519_rfc7748_alice_public
+    call curve25519_memcmp32
+    cmp eax, 1
+    jne .csb_done
+
+    mov esi, x25519_tmp1
+    mov edi, x25519_rfc7748_bob_public
+    call curve25519_memcmp32
+
+.csb_done:
+    mov esi, x25519_csb_msg
+    call x25519_rfc7748_print_result
+
     mov esi, x25519_shared_secret
     mov edi, x25519_shared_ab
     call curve25519_fe_copy

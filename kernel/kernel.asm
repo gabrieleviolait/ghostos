@@ -61,6 +61,7 @@ halt_cpu:
 %include "kernel/protected/pci.inc"
 %include "kernel/protected/crypto/sha256.inc"
 %include "kernel/protected/crypto/hmac_sha256.inc"
+%include "kernel/protected/crypto/hkdf_sha256.inc"
 %include "kernel/protected/crypto/rng.inc"
 %include "kernel/protected/crypto/curve25519.inc"
 %include "kernel/protected/net/rtl8139.inc"

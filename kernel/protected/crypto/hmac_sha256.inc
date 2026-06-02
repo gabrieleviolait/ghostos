@@ -51,6 +51,79 @@ hmac_sha256test:
 
     ret
 
+hmac_sha256_hash:
+    ; Generic HMAC-SHA256
+    ; ESI = key ptr
+    ; ECX = key len
+    ; EDX = message ptr
+    ; EBX = message len
+    ; EDI = output ptr, 32 bytes
+    ;
+    ; Note: this routine currently supports keys <= 64 bytes.
+    pushad
+
+    mov [hmac_current_msg_ptr], edx
+    mov [hmac_current_msg_len], ebx
+    mov [hmac_output_ptr], edi
+
+    call hmac_prepare_pads
+    call hmac_build_inner_input_generic
+
+    mov esi, hmac_inner_input
+    mov ecx, HMAC_BLOCK_SIZE
+    add ecx, [hmac_current_msg_len]
+    mov edi, hmac_inner_hash
+    call sha256_hash_buffer
+
+    call hmac_build_outer_input
+
+    mov esi, hmac_outer_input
+    mov ecx, HMAC_BLOCK_SIZE + HMAC_HASH_SIZE
+    mov edi, hmac_final_hash
+    call sha256_hash_buffer
+
+    mov esi, hmac_final_hash
+    mov edi, [hmac_output_ptr]
+    mov ecx, HMAC_HASH_SIZE
+
+.copy_final:
+    lodsb
+    stosb
+    loop .copy_final
+
+    popad
+    ret
+
+
+hmac_build_inner_input_generic:
+    ; builds hmac_inner_input = ipad64 || caller message
+    pushad
+
+    mov edi, hmac_inner_input
+    mov esi, hmac_ipad_buffer
+    mov ecx, HMAC_BLOCK_SIZE
+
+.copy_ipad:
+    lodsb
+    stosb
+    loop .copy_ipad
+
+    mov esi, [hmac_current_msg_ptr]
+    mov ecx, [hmac_current_msg_len]
+
+.copy_msg:
+    cmp ecx, 0
+    je .done
+    lodsb
+    stosb
+    dec ecx
+    jmp .copy_msg
+
+.done:
+    popad
+    ret
+
+
 hmac_prepare_pads:
     ; ESI = key ptr
     ; ECX = key len
@@ -173,4 +246,7 @@ hmac_inner_hash times HMAC_HASH_SIZE db 0
 hmac_inner_input times 128 db 0
 hmac_outer_input times 128 db 0
 hmac_final_hash times 32 db 0
+hmac_current_msg_ptr dd 0
+hmac_current_msg_len dd 0
+hmac_output_ptr dd 0
 

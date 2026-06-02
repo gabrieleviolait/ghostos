@@ -10,6 +10,7 @@ x25519_fg2_msg db 'FG2',0
 x25519_fg0_msg db 'FG0',0
 x25519_fgq_msg db 'FGQ',0
 x25519_u5d_msg db 'U5D',0
+x25519_ubd_msg db 'UBD',0
 x25519_rfc_shared_msg db 'S',0
 x25519_rfc_shared_abba_msg db 'ABBA',0
 x25519_scalar_a_msg db 'SA',0
@@ -60,6 +61,8 @@ x25519_shared_ab times 32 db 0
 x25519_shared_ba times 32 db 0
 x25519_u5_run1 times 32 db 0
 x25519_u5_run2 times 32 db 0
+x25519_ub_run1 times 32 db 0
+x25519_ub_run2 times 32 db 0
 curve25519_fe_a times 32 db 0
 curve25519_fe_b times 32 db 0
 curve25519_fe_out times 32 db 0
@@ -283,6 +286,41 @@ x25519_rfc7748_validate:
     mov edi, x25519_u5_run2
     call curve25519_memcmp32
     mov esi, x25519_u5d_msg
+    call x25519_rfc7748_print_result
+
+    ; UBD: Alice scalar * BobPublic twice must be deterministic
+    mov esi, x25519_rfc7748_alice_private
+    mov edi, curve25519_private_key
+    call curve25519_fe_copy
+    call curve25519_clamp_private
+
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_peer_public_key
+    call curve25519_fe_copy
+
+    call x25519_generate_shared_secret_skeleton
+    mov esi, x25519_shared_secret
+    mov edi, x25519_ub_run1
+    call curve25519_fe_copy
+
+    mov esi, x25519_rfc7748_alice_private
+    mov edi, curve25519_private_key
+    call curve25519_fe_copy
+    call curve25519_clamp_private
+
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_peer_public_key
+    call curve25519_fe_copy
+
+    call x25519_generate_shared_secret_skeleton
+    mov esi, x25519_shared_secret
+    mov edi, x25519_ub_run2
+    call curve25519_fe_copy
+
+    mov esi, x25519_ub_run1
+    mov edi, x25519_ub_run2
+    call curve25519_memcmp32
+    mov esi, x25519_ubd_msg
     call x25519_rfc7748_print_result
 
     mov esi, x25519_rfc7748_bob_public

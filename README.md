@@ -25,6 +25,7 @@ The project is developed as a learning and research platform to explore how mode
 | RNG                         | ✅ Working      |
 | Curve25519 Field Arithmetic | ✅ Working      |
 | X25519                      | ✅ Working      |
+| TLS Key Schedule Foundations | ✅ Experimental |
 | TLS                         | ⬜ Planned      |
 | Tor Link Protocol           | ⬜ Planned      |
 
@@ -111,6 +112,22 @@ Implemented:
 * RFC5869 Test Case 1 validation
 * Deterministic PRK / OKM verification
 
+#### GhostTLS v0.1
+
+##### Key Schedule Foundations
+
+Implemented:
+
+* TLS-style key schedule skeleton
+* Early secret derivation
+* Handshake secret derivation
+* Client handshake traffic secret derivation
+* Server handshake traffic secret derivation
+* Client application traffic secret placeholder
+* Server application traffic secret placeholder
+* Deterministic key schedule validation
+* `tlsscheduletest` shell command
+
 ---
 
 ## Development Status
@@ -119,7 +136,7 @@ GhostOS is currently in an experimental phase.
 
 The networking stack is functional for low-level communication testing.
 
-The cryptographic subsystem now includes RFC7748-validated X25519 and RFC5869-validated HKDF-SHA256, and is evolving toward TLS foundations and privacy-oriented protocols.
+The cryptographic subsystem now includes RFC7748-validated X25519, RFC5869-validated HKDF-SHA256, and an experimental GhostTLS key schedule foundation. The project is evolving toward TLS record handling and privacy-oriented protocols.
 
 ---
 
@@ -159,11 +176,22 @@ GhostOS now matches the RFC7748 X25519 public key/shared secret reference vector
 * ✅ PRK verification
 * ✅ OKM verification
 
-### GhostTLS
+### GhostTLS v0.1 — Key Schedule Foundations
 
-* TLS Key Schedule
+* ✅ TLS-style key schedule skeleton
+* ✅ Early secret derivation
+* ✅ Handshake secret derivation
+* ✅ Client handshake traffic secret derivation
+* ✅ Server handshake traffic secret derivation
+* ✅ Application traffic secret placeholders
+* ✅ Deterministic key schedule test
+
+### GhostTLS v0.2 — Record Layer / ClientHello
+
 * TLS Record Layer
-* ClientHello
+* Plaintext record formatting
+* ClientHello skeleton
+* Key share extension plumbing
 * Encrypted Records
 
 ### GhostTor
@@ -220,6 +248,7 @@ tcpstat
 sha256test
 hmacsha256test
 hkdfsha256test
+tlsscheduletest
 rngtest
 rfc7748test
 ```

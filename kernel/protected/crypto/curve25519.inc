@@ -3,21 +3,17 @@
 ; v0.4 skeleton
 ; ============================================================
 
-x25519_rfc_alice_msg db 'Alice PK: ',0
-x25519_rfc_bob_msg db 'Bob PK: ',0
-x25519_rfc_shared_msg db 'Shared: ',0
-x25519_rfc_final_msg db 'RFC7748: ',0
+x25519_rfc_alice_msg db 'A ',0
+x25519_rfc_bob_msg db 'B ',0
+x25519_rfc_shared_msg db 'S ',0
 x25519_rfc_pass_msg db 'PASS',13,0
 x25519_rfc_fail_msg db 'FAIL',13,0
-x25519_rfc_ac_msg db 'A comp ',0
-x25519_rfc_ae_msg db 'A exp ',0
-x25519_rfc_bc_msg db 'B comp ',0
-x25519_rfc_be_msg db 'B exp ',0
-x25519_rfc_sc_msg db 'S comp ',0
-x25519_rfc_se_msg db 'S exp ',0
-x25519_rfc_clamp_msg db 'A clamp ',0
-x25519_rfc_base_msg db 'Base ',0
-x25519_rfc_u_msg db 'Bob u LE = ',0
+x25519_field_add_msg db 'Fa ',0
+x25519_field_sub_msg db 'Fs ',0
+x25519_field_mul_msg db 'Fm ',0
+x25519_field_square_msg db 'Fq ',0
+x25519_field_p_msg db 'Fp ',0
+x25519_field_p1_msg db 'F1 ',0
 
 ; RFC7748 section 5.2 X25519 test vectors.
 x25519_rfc7748_alice_private:
@@ -78,10 +74,7 @@ x25519_DA times 32 db 0
 x25519_CB times 32 db 0
 x25519_tmp2 times 32 db 0
 x25519_tmp3 times 32 db 0
-x25519_loop_count dd 0
-x25519_last_bit db 0
 x25519_swap_state db 0
-x25519_rfc_fail_flag db 0
 curve25519_inv_t0 times 32 db 0
 curve25519_inv_t1 times 32 db 0
 curve25519_inv_t2 times 32 db 0
@@ -165,26 +158,14 @@ x25519_generate_shared_secret_skeleton:
 x25519_rfc7748_validate:
     pushad
 
-    mov byte [x25519_rfc_fail_flag], 0
+    call x25519_field_selftest
 
     mov esi, x25519_rfc7748_alice_private
     mov edi, curve25519_private_key
     call curve25519_fe_copy
     call curve25519_clamp_private
-    mov esi, x25519_rfc_clamp_msg
-    mov edi, curve25519_private_key
-    call x25519_rfc7748_dump32
-    mov esi, x25519_rfc_base_msg
-    mov edi, curve25519_basepoint
-    call x25519_rfc7748_dump32
     call x25519_ladder_init
     call x25519_generate_public_skeleton
-    mov esi, x25519_rfc_ac_msg
-    mov edi, curve25519_public_key
-    call x25519_rfc7748_dump32
-    mov esi, x25519_rfc_ae_msg
-    mov edi, x25519_rfc7748_alice_public
-    call x25519_rfc7748_dump32
     mov esi, curve25519_public_key
     mov edi, x25519_rfc7748_alice_public
     call curve25519_memcmp32
@@ -197,12 +178,6 @@ x25519_rfc7748_validate:
     call curve25519_clamp_private
     call x25519_ladder_init
     call x25519_generate_public_skeleton
-    mov esi, x25519_rfc_bc_msg
-    mov edi, curve25519_public_key
-    call x25519_rfc7748_dump32
-    mov esi, x25519_rfc_be_msg
-    mov edi, x25519_rfc7748_bob_public
-    call x25519_rfc7748_dump32
     mov esi, curve25519_public_key
     mov edi, x25519_rfc7748_bob_public
     call curve25519_memcmp32
@@ -216,29 +191,11 @@ x25519_rfc7748_validate:
     mov esi, x25519_rfc7748_bob_public
     mov edi, x25519_peer_public_key
     call curve25519_fe_copy
-    mov esi, x25519_rfc_u_msg
-    mov edi, x25519_peer_public_key
-    call x25519_rfc7748_dump32
     call x25519_generate_shared_secret_skeleton
-    mov esi, x25519_rfc_sc_msg
-    mov edi, x25519_shared_secret
-    call x25519_rfc7748_dump32
-    mov esi, x25519_rfc_se_msg
-    mov edi, x25519_rfc7748_shared
-    call x25519_rfc7748_dump32
     mov esi, x25519_shared_secret
     mov edi, x25519_rfc7748_shared
     call curve25519_memcmp32
     mov esi, x25519_rfc_shared_msg
-    call x25519_rfc7748_print_result
-
-    mov eax, 1
-    cmp byte [x25519_rfc_fail_flag], 0
-    je .print_final
-    xor eax, eax
-
-.print_final:
-    mov esi, x25519_rfc_final_msg
     call x25519_rfc7748_print_result
 
     popad
@@ -250,7 +207,6 @@ x25519_rfc7748_print_result:
     pop eax
     cmp eax, 1
     je .pass
-    mov byte [x25519_rfc_fail_flag], 1
     mov esi, x25519_rfc_fail_msg
     call pm_print_string
     ret
@@ -260,18 +216,83 @@ x25519_rfc7748_print_result:
     call pm_print_string
     ret
 
-x25519_rfc7748_dump32:
-    call pm_print_string
-    mov esi, edi
-    mov ecx, 32
-    call rtl8139_dump_bytes
+x25519_field_selftest:
+    pushad
+
+    mov al, 9
+    mov edi, curve25519_fe_a
+    call curve25519_fe_set_small
+    mov al, 9
+    mov edi, curve25519_fe_b
+    call curve25519_fe_set_small
+
+    mov esi, curve25519_fe_a
+    mov edi, curve25519_fe_b
+    mov edx, curve25519_fe_out
+    call curve25519_fe_add
+    mov esi, curve25519_fe_out
+    mov al, 18
+    call curve25519_fe_is_small
+    mov esi, x25519_field_add_msg
+    call x25519_rfc7748_print_result
+
+    mov esi, curve25519_fe_out
+    mov edi, curve25519_fe_b
+    mov edx, curve25519_fe_out
+    call curve25519_fe_sub
+    mov esi, curve25519_fe_out
+    mov al, 9
+    call curve25519_fe_is_small
+    mov esi, x25519_field_sub_msg
+    call x25519_rfc7748_print_result
+
+    mov esi, curve25519_fe_a
+    mov edi, curve25519_fe_b
+    mov edx, curve25519_fe_out
+    call curve25519_fe_mul
+    mov esi, curve25519_fe_out
+    mov al, 81
+    call curve25519_fe_is_small
+    mov esi, x25519_field_mul_msg
+    call x25519_rfc7748_print_result
+
+    mov esi, curve25519_fe_a
+    mov edx, curve25519_fe_out
+    call curve25519_fe_square
+    mov esi, curve25519_fe_out
+    mov al, 81
+    call curve25519_fe_is_small
+    mov esi, x25519_field_square_msg
+    call x25519_rfc7748_print_result
+
+    mov al, 237
+    call curve25519_prepare_p_temp
+    call curve25519_fe_normalize
+    mov edi, curve25519_fe_out
+    call curve25519_mul_temp_copy_low32
+    mov esi, curve25519_fe_out
+    xor al, al
+    call curve25519_fe_is_small
+    mov esi, x25519_field_p_msg
+    call x25519_rfc7748_print_result
+
+    mov al, 238
+    call curve25519_prepare_p_temp
+    call curve25519_fe_normalize
+    mov edi, curve25519_fe_out
+    call curve25519_mul_temp_copy_low32
+    mov esi, curve25519_fe_out
+    mov al, 1
+    call curve25519_fe_is_small
+    mov esi, x25519_field_p1_msg
+    call x25519_rfc7748_print_result
+
+    popad
     ret
 
 x25519_ladder_loop_skeleton:
     pushad
 
-    mov dword [x25519_loop_count], 0
-    mov byte [x25519_last_bit], 0
     mov byte [x25519_swap_state], 0
 
     mov ebx, 254
@@ -285,7 +306,6 @@ x25519_ladder_loop_skeleton:
     and ecx, 7
     shr dl, cl
     and dl, 1
-    mov [x25519_last_bit], dl
 
     mov al, [x25519_swap_state]
     xor al, dl
@@ -302,7 +322,6 @@ x25519_ladder_loop_skeleton:
     mov [x25519_swap_state], dl
 
     call x25519_ladder_step_once
-    inc dword [x25519_loop_count]
 
     cmp ebx, 0
     je .final_cswap
@@ -430,20 +449,6 @@ x25519_ladder_step_once:
     popad
     ret
 
-curve25519_load_test_scalar:
-    push esi
-    push edi
-
-    mov esi, x25519_rfc7748_alice_private
-    mov edi, curve25519_private_key
-    call curve25519_fe_copy
-
-    call curve25519_clamp_private
-
-    pop edi
-    pop esi
-    ret
-
 curve25519_clamp_private:
     ; clamp per X25519
     ; clear bits 0-2
@@ -506,6 +511,47 @@ curve25519_memcmp32:
     pop edi
     pop esi
     pop ecx
+    ret
+
+curve25519_fe_is_small:
+    ; ESI = field element, AL = expected low byte, EAX = match flag
+
+    mov bl, al
+    xor eax, eax
+    cmp [esi], bl
+    jne .done
+    inc esi
+    mov ecx, 31
+
+.loop:
+    cmp byte [esi], 0
+    jne .done
+    inc esi
+    dec ecx
+    jnz .loop
+    mov eax, 1
+
+.done:
+    ret
+
+curve25519_prepare_p_temp:
+    ; AL = low byte. 237 for p, 238 for p+1.
+
+    mov edi, curve25519_mul_temp
+    movzx eax, al
+    mov [edi], eax
+    add edi, 4
+    mov ecx, 30
+    mov eax, 255
+
+.mid:
+    mov [edi], eax
+    add edi, 4
+    dec ecx
+    jnz .mid
+
+    mov eax, 127
+    mov [edi], eax
     ret
 
 curve25519_fe_cswap:

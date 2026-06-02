@@ -758,7 +758,7 @@ pm_help_msg db \
 'Commands:',13,\
 'help cls clear echo version',13,\
 'mem heapinfo memmap pages',13,\
-'sha256test hmacsha256test rngtest rfc7748test',13,\
+'sha256test hmacsha256test rngtest',13,\
 'lspci netdev netup netstat netdiag netbar',13,\
 'mac setmac randommac',13,\
 'txdemo txdump pktdump pktinfo txstatus',13,\
@@ -767,7 +767,7 @@ pm_help_msg db \
 'regs stack uptime panic',13,\
 'tasks yield',13,\
 'ls cat browse run halt',13,0
-pm_version_msg db 'Ghost OS v1.5.5-alpha / RTL8139 raw ethernet skeleton',13,0
+pm_version_msg db 'Ghost OS v1.5.5-alpha',13,0
 pm_unknown_msg db 'Unknown command. Type help.',13,0
 pm_halt_msg db 'System halted.',13,0
 pm_run_usage_msg db 'Usage: run HELLO.GEX [args]',13,0

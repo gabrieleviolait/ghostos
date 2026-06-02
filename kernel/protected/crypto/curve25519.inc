@@ -3,27 +3,19 @@
 ; v0.4 skeleton
 ; ============================================================
 
-x25519_rfc_alice_msg db 'A ',0
-x25519_rfc_bob_msg db 'B ',0
-x25519_rfc_shared_msg db 'S ',0
-x25519_rfc_shared_ab_msg db 'AB ',0
-x25519_rfc_shared_ba_msg db 'BA ',0
-x25519_shared_init_msg db 'I ',0
-x25519_rfc_final_msg db 'R ',0
+x25519_rfc_alice_msg db 'A',0
+x25519_rfc_bob_msg db 'B',0
+x25519_rfc_shared_msg db 'S',0
+x25519_rfc_shared_abba_msg db 'ABBA',0
+x25519_scalar_a_msg db 'SA',0
+x25519_scalar_b_msg db 'SB',0
+x25519_rfc_shared_ab_msg db 'AB',0
+x25519_rfc_shared_ba_msg db 'BA',0
+x25519_shared_init_msg db 'I',0
+x25519_x1b_msg db 'X1B',0
+x25519_rfc_final_msg db 'R',0
 x25519_rfc_pass_msg db 'PASS',13,0
 x25519_rfc_fail_msg db 'FAIL',13,0
-x25519_field_add_msg db 'Fa ',0
-x25519_field_sub_msg db 'Fs ',0
-x25519_field_mul_msg db 'Fm ',0
-x25519_field_square_msg db 'Fq ',0
-x25519_field_p_msg db 'Fp ',0
-x25519_field_p1_msg db 'F1 ',0
-x25519_field_neg_msg db 'Fn ',0
-x25519_field_neg_square_msg db 'Fq- ',0
-x25519_field_neg_z_msg db 'Fz- ',0
-x25519_inv_one_msg db 'I1 ',0
-x25519_inv_nine_msg db 'I9 ',0
-x25519_inv_x_msg db 'Ix ',0
 ; RFC7748 section 5.2 X25519 test vectors.
 x25519_rfc7748_alice_private:
     db 077h, 007h, 06Dh, 00Ah, 073h, 018h, 0A5h, 07Dh
@@ -59,6 +51,8 @@ curve25519_private_key times 32 db 0
 curve25519_public_key  times 32 db 0
 x25519_peer_public_key times 32 db 0
 x25519_shared_secret times 32 db 0
+x25519_shared_ab times 32 db 0
+x25519_shared_ba times 32 db 0
 curve25519_fe_a times 32 db 0
 curve25519_fe_b times 32 db 0
 curve25519_fe_out times 32 db 0
@@ -168,8 +162,6 @@ x25519_generate_shared_secret_skeleton:
 x25519_rfc7748_validate:
     pushad
 
-    call x25519_field_selftest
-    call x25519_invert_selftest
     mov byte [x25519_rfc_fail_flag], 0
 
     mov esi, x25519_rfc7748_alice_private
@@ -205,31 +197,66 @@ x25519_rfc7748_validate:
     mov edi, curve25519_private_key
     call curve25519_fe_copy
     call curve25519_clamp_private
+    mov esi, curve25519_private_key
+    mov edi, curve25519_public_key
+    call curve25519_fe_copy
     mov esi, x25519_rfc7748_bob_public
     mov edi, x25519_peer_public_key
     call curve25519_fe_copy
     call x25519_generate_shared_secret_skeleton
-    mov esi, x25519_shared_secret
-    mov edi, x25519_rfc7748_shared
+    mov esi, x25519_x1
+    mov edi, x25519_peer_public_key
     call curve25519_memcmp32
-    mov esi, x25519_rfc_shared_ab_msg
+    mov esi, x25519_x1b_msg
+    call x25519_rfc7748_print_result
+    mov esi, x25519_shared_secret
+    mov edi, x25519_shared_ab
+    call curve25519_fe_copy
+    mov esi, curve25519_private_key
+    mov edi, curve25519_public_key
+    call curve25519_memcmp32
+    mov esi, x25519_scalar_a_msg
     call x25519_rfc7748_print_result
 
     mov esi, x25519_rfc7748_bob_private
     mov edi, curve25519_private_key
     call curve25519_fe_copy
     call curve25519_clamp_private
+    mov esi, curve25519_private_key
+    mov edi, curve25519_public_key
+    call curve25519_fe_copy
     mov esi, x25519_rfc7748_alice_public
     mov edi, x25519_peer_public_key
     call curve25519_fe_copy
     call x25519_generate_shared_secret_skeleton
     mov esi, x25519_shared_secret
+    mov edi, x25519_shared_ba
+    call curve25519_fe_copy
+    mov esi, curve25519_private_key
+    mov edi, curve25519_public_key
+    call curve25519_memcmp32
+    mov esi, x25519_scalar_b_msg
+    call x25519_rfc7748_print_result
+
+    mov esi, x25519_shared_ab
+    mov edi, x25519_shared_ba
+    call curve25519_memcmp32
+    mov esi, x25519_rfc_shared_abba_msg
+    call x25519_rfc7748_print_result
+
+    mov esi, x25519_shared_ab
+    mov edi, x25519_rfc7748_shared
+    call curve25519_memcmp32
+    mov esi, x25519_rfc_shared_ab_msg
+    call x25519_rfc7748_print_result
+
+    mov esi, x25519_shared_ba
     mov edi, x25519_rfc7748_shared
     call curve25519_memcmp32
     mov esi, x25519_rfc_shared_ba_msg
     call x25519_rfc7748_print_result
 
-    mov esi, x25519_shared_secret
+    mov esi, x25519_shared_ba
     mov edi, x25519_rfc7748_shared
     call curve25519_memcmp32
     mov esi, x25519_rfc_shared_msg
@@ -300,162 +327,6 @@ x25519_check_shared_init:
 
 .fail:
     xor eax, eax
-    ret
-
-x25519_field_selftest:
-    pushad
-
-    mov al, 9
-    mov edi, curve25519_fe_a
-    call curve25519_fe_set_small
-    mov al, 9
-    mov edi, curve25519_fe_b
-    call curve25519_fe_set_small
-
-    mov esi, curve25519_fe_a
-    mov edi, curve25519_fe_b
-    mov edx, curve25519_fe_out
-    call curve25519_fe_add
-    mov esi, curve25519_fe_out
-    mov al, 18
-    call curve25519_fe_is_small
-    mov esi, x25519_field_add_msg
-    call x25519_rfc7748_print_result
-
-    mov esi, curve25519_fe_out
-    mov edi, curve25519_fe_b
-    mov edx, curve25519_fe_out
-    call curve25519_fe_sub
-    mov esi, curve25519_fe_out
-    mov al, 9
-    call curve25519_fe_is_small
-    mov esi, x25519_field_sub_msg
-    call x25519_rfc7748_print_result
-
-    mov esi, curve25519_fe_a
-    mov edi, curve25519_fe_b
-    mov edx, curve25519_fe_out
-    call curve25519_fe_mul
-    mov esi, curve25519_fe_out
-    mov al, 81
-    call curve25519_fe_is_small
-    mov esi, x25519_field_mul_msg
-    call x25519_rfc7748_print_result
-
-    mov esi, curve25519_fe_a
-    mov edx, curve25519_fe_out
-    call curve25519_fe_square
-    mov esi, curve25519_fe_out
-    mov al, 81
-    call curve25519_fe_is_small
-    mov esi, x25519_field_square_msg
-    call x25519_rfc7748_print_result
-
-    mov al, 237
-    call curve25519_prepare_p_temp
-    call curve25519_fe_normalize
-    mov edi, curve25519_fe_out
-    call curve25519_mul_temp_copy_low32
-    mov esi, curve25519_fe_out
-    xor al, al
-    call curve25519_fe_is_small
-    mov esi, x25519_field_p_msg
-    call x25519_rfc7748_print_result
-
-    mov al, 238
-    call curve25519_prepare_p_temp
-    call curve25519_fe_normalize
-    mov edi, curve25519_fe_out
-    call curve25519_mul_temp_copy_low32
-    mov esi, curve25519_fe_out
-    mov al, 1
-    call curve25519_fe_is_small
-    mov esi, x25519_field_p1_msg
-    call x25519_rfc7748_print_result
-
-    mov al, 8
-    mov edi, curve25519_fe_a
-    call curve25519_fe_set_small
-    mov al, 10
-    mov edi, curve25519_fe_b
-    call curve25519_fe_set_small
-    mov esi, curve25519_fe_a
-    mov edi, curve25519_fe_b
-    mov edx, curve25519_fe_out
-    call curve25519_fe_sub
-    mov esi, curve25519_fe_out
-    call curve25519_fe_is_p_minus_2
-    mov esi, x25519_field_neg_msg
-    call x25519_rfc7748_print_result
-
-    mov esi, curve25519_fe_out
-    mov edx, curve25519_fe_b
-    call curve25519_fe_square
-    mov esi, curve25519_fe_b
-    mov al, 4
-    call curve25519_fe_is_small
-    mov esi, x25519_field_neg_square_msg
-    call x25519_rfc7748_print_result
-
-    mov al, 9
-    mov edi, curve25519_fe_a
-    call curve25519_fe_set_small
-    mov esi, curve25519_fe_a
-    mov edi, curve25519_fe_b
-    mov edx, curve25519_fe_out
-    call curve25519_fe_mul
-    mov esi, curve25519_fe_out
-    mov eax, 36
-    call curve25519_fe_is_u32
-    mov esi, x25519_field_neg_z_msg
-    call x25519_rfc7748_print_result
-
-    popad
-    ret
-
-x25519_invert_selftest:
-    pushad
-
-    mov al, 1
-    mov edi, curve25519_fe_a
-    call curve25519_fe_set_small
-    mov esi, curve25519_fe_a
-    mov edi, curve25519_fe_b
-    call curve25519_fe_invert
-    mov esi, curve25519_fe_b
-    mov al, 1
-    call curve25519_fe_is_small
-    mov esi, x25519_inv_one_msg
-    call x25519_rfc7748_print_result
-
-    mov al, 9
-    mov edi, curve25519_fe_a
-    call curve25519_fe_set_small
-    call x25519_invert_product_is_one
-    mov esi, x25519_inv_nine_msg
-    call x25519_rfc7748_print_result
-
-    mov edi, curve25519_fe_a
-    call curve25519_fe_zero
-    mov dword [curve25519_fe_a], 123456789
-    call x25519_invert_product_is_one
-    mov esi, x25519_inv_x_msg
-    call x25519_rfc7748_print_result
-
-    popad
-    ret
-
-x25519_invert_product_is_one:
-    mov esi, curve25519_fe_a
-    mov edi, curve25519_fe_b
-    call curve25519_fe_invert
-    mov esi, curve25519_fe_a
-    mov edi, curve25519_fe_b
-    mov edx, curve25519_fe_out
-    call curve25519_fe_mul
-    mov esi, curve25519_fe_out
-    mov al, 1
-    call curve25519_fe_is_small
     ret
 
 x25519_ladder_loop_skeleton:

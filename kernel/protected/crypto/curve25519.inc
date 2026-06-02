@@ -6,6 +6,7 @@
 x25519_rfc_alice_msg db 'A ',0
 x25519_rfc_bob_msg db 'B ',0
 x25519_rfc_shared_msg db 'S ',0
+x25519_rfc_final_msg db 'RFC ',0
 x25519_rfc_pass_msg db 'PASS',13,0
 x25519_rfc_fail_msg db 'FAIL',13,0
 x25519_field_add_msg db 'Fa ',0
@@ -14,6 +15,9 @@ x25519_field_mul_msg db 'Fm ',0
 x25519_field_square_msg db 'Fq ',0
 x25519_field_p_msg db 'Fp ',0
 x25519_field_p1_msg db 'F1 ',0
+x25519_inv_one_msg db 'Fi1 ',0
+x25519_inv_nine_msg db 'Fi9 ',0
+x25519_inv_x_msg db 'Fix ',0
 
 ; RFC7748 section 5.2 X25519 test vectors.
 x25519_rfc7748_alice_private:
@@ -75,6 +79,7 @@ x25519_CB times 32 db 0
 x25519_tmp2 times 32 db 0
 x25519_tmp3 times 32 db 0
 x25519_swap_state db 0
+x25519_rfc_fail_flag db 0
 curve25519_inv_t0 times 32 db 0
 curve25519_inv_t1 times 32 db 0
 curve25519_inv_t2 times 32 db 0
@@ -159,6 +164,8 @@ x25519_rfc7748_validate:
     pushad
 
     call x25519_field_selftest
+    call x25519_invert_selftest
+    mov byte [x25519_rfc_fail_flag], 0
 
     mov esi, x25519_rfc7748_alice_private
     mov edi, curve25519_private_key
@@ -198,6 +205,15 @@ x25519_rfc7748_validate:
     mov esi, x25519_rfc_shared_msg
     call x25519_rfc7748_print_result
 
+    mov eax, 1
+    cmp byte [x25519_rfc_fail_flag], 0
+    je .print_final
+    xor eax, eax
+
+.print_final:
+    mov esi, x25519_rfc_final_msg
+    call x25519_rfc7748_print_result
+
     popad
     ret
 
@@ -207,6 +223,7 @@ x25519_rfc7748_print_result:
     pop eax
     cmp eax, 1
     je .pass
+    mov byte [x25519_rfc_fail_flag], 1
     mov esi, x25519_rfc_fail_msg
     call pm_print_string
     ret
@@ -288,6 +305,51 @@ x25519_field_selftest:
     call x25519_rfc7748_print_result
 
     popad
+    ret
+
+x25519_invert_selftest:
+    pushad
+
+    mov al, 1
+    mov edi, curve25519_fe_a
+    call curve25519_fe_set_small
+    mov esi, curve25519_fe_a
+    mov edi, curve25519_fe_b
+    call curve25519_fe_invert
+    mov esi, curve25519_fe_b
+    mov al, 1
+    call curve25519_fe_is_small
+    mov esi, x25519_inv_one_msg
+    call x25519_rfc7748_print_result
+
+    mov al, 9
+    mov edi, curve25519_fe_a
+    call curve25519_fe_set_small
+    call x25519_invert_product_is_one
+    mov esi, x25519_inv_nine_msg
+    call x25519_rfc7748_print_result
+
+    mov edi, curve25519_fe_a
+    call curve25519_fe_zero
+    mov dword [curve25519_fe_a], 123456789
+    call x25519_invert_product_is_one
+    mov esi, x25519_inv_x_msg
+    call x25519_rfc7748_print_result
+
+    popad
+    ret
+
+x25519_invert_product_is_one:
+    mov esi, curve25519_fe_a
+    mov edi, curve25519_fe_b
+    call curve25519_fe_invert
+    mov esi, curve25519_fe_a
+    mov edi, curve25519_fe_b
+    mov edx, curve25519_fe_out
+    call curve25519_fe_mul
+    mov esi, curve25519_fe_out
+    mov al, 1
+    call curve25519_fe_is_small
     ret
 
 x25519_ladder_loop_skeleton:

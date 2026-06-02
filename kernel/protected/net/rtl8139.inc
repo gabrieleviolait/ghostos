@@ -115,6 +115,7 @@ rtl8139_tcp_tx_count dd 0
 rtl8139_tcp_rx_count dd 0
 rtl8139_tcp_synack_count dd 0
 rtl8139_tcp_ack_tx_count dd 0
+rtl8139_tcp_data_tx_count dd 0
 rtl8139_tcp_src_port dw 49153
 rtl8139_tcp_dst_port dw 80
 rtl8139_tcp_seq dd 01020304h
@@ -321,6 +322,7 @@ rtl8139_netreset:
     mov dword [rtl8139_tcp_rx_count], 0
     mov dword [rtl8139_tcp_synack_count], 0
     mov dword [rtl8139_tcp_ack_tx_count], 0
+    mov dword [rtl8139_tcp_data_tx_count], 0
     mov dword [rtl8139_tcp_last_src_ip], 0
     mov word [rtl8139_tcp_last_src_port], 0
     mov word [rtl8139_tcp_last_dst_port], 0
@@ -352,6 +354,7 @@ rtl8139_netclear:
     mov dword [rtl8139_tcp_rx_count], 0
     mov dword [rtl8139_tcp_synack_count], 0
     mov dword [rtl8139_tcp_ack_tx_count], 0
+    mov dword [rtl8139_tcp_data_tx_count], 0
     mov dword [rtl8139_tcp_last_src_ip], 0
     mov word [rtl8139_tcp_last_src_port], 0
     mov word [rtl8139_tcp_last_dst_port], 0
@@ -715,12 +718,25 @@ rtl8139_tcpconnect_cmd:
 
     call pm_skip_first_word
     call pm_skip_spaces
+
+    mov edi, rtl8139_tcp_dst_port_8080_text
+    call pm_starts_with_word
+    jc .port_8080
+
     mov edi, rtl8139_tcp_dst_port_text
     call pm_starts_with_word
-    jnc .usage
+    jc .port_80
 
+    jmp .usage
+
+.port_8080:
+    mov word [rtl8139_tcp_dst_port], 8080
+    jmp .port_ok
+
+.port_80:
     mov word [rtl8139_tcp_dst_port], 80
 
+.port_ok:
     cmp byte [rtl8139_initialized], 1
     je .ready
 
@@ -783,6 +799,25 @@ rtl8139_tcpconnect_cmd:
     call pm_print_string
     ret
 
+rtl8139_tcpget_cmd:
+    cmp byte [rtl8139_tcp_state], TCP_STATE_ESTABLISHED
+    je .established
+
+    mov esi, rtl8139_tcp_not_established_msg
+    call pm_print_string
+    ret
+
+.established:
+    call rtl8139_build_tcp_http_get
+    call rtl8139_tx_submit_current_quiet
+    inc dword [rtl8139_tcp_tx_count]
+    inc dword [rtl8139_tcp_data_tx_count]
+    add dword [rtl8139_tcp_seq], rtl8139_tcp_http_get_len
+
+    mov esi, rtl8139_tcp_data_sent_msg
+    call pm_print_string
+    ret
+
 rtl8139_tcpstat:
     mov esi, rtl8139_tcpstat_msg
     call pm_print_string
@@ -812,6 +847,12 @@ rtl8139_tcpstat:
     mov esi, rtl8139_tcp_ack_tx_msg
     call pm_print_string
     mov eax, [rtl8139_tcp_ack_tx_count]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_tcp_data_tx_msg
+    call pm_print_string
+    mov eax, [rtl8139_tcp_data_tx_count]
     call pm_print_uint32
     call pm_newline
 
@@ -1080,6 +1121,98 @@ rtl8139_build_tcp_ack:
     popad
     ret
 
+rtl8139_build_tcp_http_get:
+    pushad
+
+    mov edi, rtl8139_tx_buffer
+    mov ecx, 2048
+    xor eax, eax
+    rep stosb
+
+    mov edi, rtl8139_tx_buffer
+
+    ; Ethernet destination MAC
+    mov esi, rtl8139_gateway_mac
+    mov ecx, 6
+.copy_dst:
+    lodsb
+    stosb
+    loop .copy_dst
+
+    ; Ethernet source MAC
+    mov esi, rtl8139_mac
+    mov ecx, 6
+.copy_src:
+    lodsb
+    stosb
+    loop .copy_src
+
+    ; Ethertype IPv4
+    mov al, 08h
+    stosb
+    mov al, 00h
+    stosb
+
+    ; IPv4 header with TCP + payload length
+    mov ax, 20 + 20 + rtl8139_tcp_http_get_len
+    mov bl, 06h
+    mov esi, rtl8139_gateway_ip
+    call rtl8139_write_ipv4_header
+
+    ; TCP source port
+    mov ax, [rtl8139_tcp_src_port]
+    xchg al, ah
+    stosw
+
+    ; TCP destination port
+    mov ax, [rtl8139_tcp_dst_port]
+    xchg al, ah
+    stosw
+
+    ; TCP sequence number: initial seq + SYN byte
+    mov eax, [rtl8139_tcp_seq]
+    inc eax
+    call rtl8139_stos_be32
+
+    ; TCP ACK number: peer SYN seq + 1
+    mov eax, [rtl8139_tcp_last_seq]
+    inc eax
+    call rtl8139_stos_be32
+
+    ; TCP header length
+    mov al, 50h
+    stosb
+
+    ; Flags: PSH + ACK
+    mov al, 18h
+    stosb
+
+    ; Window
+    mov al, 40h
+    stosb
+    xor al, al
+    stosb
+
+    ; Checksum + urgent pointer initially zero
+    xor ax, ax
+    stosw
+    stosw
+
+    ; Payload
+    mov esi, rtl8139_tcp_http_get_payload
+    mov ecx, rtl8139_tcp_http_get_len
+.copy_payload:
+    lodsb
+    stosb
+    loop .copy_payload
+
+    call rtl8139_finish_tcp_checksum_payload
+
+    mov dword [rtl8139_tx_len], 14 + 20 + 20 + rtl8139_tcp_http_get_len
+
+    popad
+    ret
+
 rtl8139_write_ipv4_tcp_frame_prefix:
     mov esi, rtl8139_gateway_mac
     mov ecx, 6
@@ -1164,6 +1297,58 @@ rtl8139_finish_tcp_checksum:
     mov esi, rtl8139_tcp_checksum_buffer
     mov ecx, 12 + 20
     call rtl8139_checksum
+    mov [rtl8139_tx_buffer + 50], ah
+    mov [rtl8139_tx_buffer + 51], al
+
+    popad
+    ret
+
+rtl8139_finish_tcp_checksum_payload:
+    pushad
+
+    mov edi, rtl8139_tcp_checksum_buffer
+    mov ecx, 64
+    xor eax, eax
+    rep stosb
+
+    mov edi, rtl8139_tcp_checksum_buffer
+
+    mov esi, rtl8139_local_ip
+    mov ecx, 4
+.copy_src_ip:
+    lodsb
+    stosb
+    loop .copy_src_ip
+
+    mov esi, rtl8139_gateway_ip
+    mov ecx, 4
+.copy_dst_ip:
+    lodsb
+    stosb
+    loop .copy_dst_ip
+
+    xor al, al
+    stosb
+    mov al, 06h
+    stosb
+
+    ; TCP length = 20-byte header + payload
+    xor al, al
+    stosb
+    mov al, 20 + rtl8139_tcp_http_get_len
+    stosb
+
+    mov esi, rtl8139_tx_buffer + 34
+    mov ecx, 20 + rtl8139_tcp_http_get_len
+.copy_tcp:
+    lodsb
+    stosb
+    loop .copy_tcp
+
+    mov esi, rtl8139_tcp_checksum_buffer
+    mov ecx, 12 + 20 + rtl8139_tcp_http_get_len
+    call rtl8139_checksum
+
     mov [rtl8139_tx_buffer + 50], ah
     mov [rtl8139_tx_buffer + 51], al
 
@@ -4537,3 +4722,19 @@ rtl8139_try_bind_io_bar:
 rtl8139_pci_bound_msg db 'RTL8139 PCI IO bound',13,0
 rtl8139_pci_fallback_msg db 'RTL8139 PCI bind failed, using fallback',13,0
 rtl8139_pci_cmd_unknown_msg db 'PCI CMD: unknown',13,0
+
+; ============================================================
+; TCP payload send test data/messages
+; Added for GhostNet TCP v0.2a
+; ============================================================
+
+rtl8139_tcp_dst_port_8080_text db '8080',0
+rtl8139_tcp_data_tx_msg db 'data_tx=',0
+rtl8139_tcp_not_established_msg db 'TCP failed: not established',13,0
+rtl8139_tcp_data_sent_msg db 'TCP data sent',13,0
+
+rtl8139_tcp_http_get_payload:
+    db 'GET / HTTP/1.0',13,10
+    db 'Host: 10.0.2.2',13,10
+    db 13,10
+rtl8139_tcp_http_get_len equ $ - rtl8139_tcp_http_get_payload

@@ -217,6 +217,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_tcpconnect
 
+    mov edi, pm_cmd_tcpget
+    call pm_starts_with_word
+    jc pm_do_tcpget
+
     mov edi, pm_cmd_tcpstat
     call pm_starts_with_word
     jc pm_do_tcpstat
@@ -549,6 +553,10 @@ pm_do_tcpconnect:
     call rtl8139_tcpconnect_cmd
     jmp shell32_loop
 
+pm_do_tcpget:
+    call rtl8139_tcpget_cmd
+    jmp shell32_loop
+
 pm_do_tcpstat:
     call rtl8139_tcpstat
     jmp shell32_loop
@@ -794,7 +802,7 @@ pm_help_msg db \
 'NET: netup netstat netdiag netbar netreset netclear',13,\
 'MAC: mac setmac randommac',13,\
 'PING: pinggw ping pingtest pingdebug',13,\
-'UDP/TCP: udpsend udpstat tcpconnect tcpstat',13,\
+'UDP/TCP: udpsend udpstat tcpconnect tcpget tcpstat',13,\
 'ARP: pingfake arp arpfake arpstat',13,\
 'TX: txdemo txdump txreal txstatus',13,\
 'PKT: pktdump pktinfo',13,\
@@ -866,6 +874,7 @@ pm_cmd_pingdebug db 'pingdebug',0
 pm_cmd_udpsend db 'udpsend',0
 pm_cmd_udpstat db 'udpstat',0
 pm_cmd_tcpconnect db 'tcpconnect',0
+pm_cmd_tcpget db 'tcpget',0
 pm_cmd_tcpstat db 'tcpstat',0
 pm_cmd_pingfake db 'pingfake',0
 pm_cmd_arpfake db 'arpfake',0

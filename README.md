@@ -82,6 +82,7 @@ The cryptographic subsystem is under active development, with the long-term goal
 ## Roadmap
 
 ### Curve25519 / X25519
+The X25519 implementation is being developed against the reference test vectors from [RFC 7748, Section 5.2](https://datatracker.ietf.org/doc/html/rfc7748#section-5.2).
 
 * Field arithmetic refinement
 * Proper reduction modulo 2^255−19
@@ -165,3 +166,4 @@ It is not production-ready and should not be used in environments where security
 The author is not responsible for misuse, damage, data loss, security incidents, or any consequences resulting from the use of this software.
 
 Use at your own risk.
+

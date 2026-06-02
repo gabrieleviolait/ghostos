@@ -10,96 +10,7 @@ curve25519test:
     call pm_print_string
 
     mov esi, curve25519_private_key
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov esi, curve25519_basepoint
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov esi, curve25519_private_key
-    mov edi, curve25519_fe_a
-    call curve25519_fe_copy
-
-    mov esi, curve25519_fe_a
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov esi, curve25519_private_key
     mov edi, curve25519_private_key
-    mov edx, curve25519_fe_out
-    call curve25519_fe_mul
-
-    mov esi, curve25519_fe_out
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov esi, curve25519_private_key
-    mov edi, curve25519_private_key
-    mov edx, curve25519_fe_out
-    call curve25519_fe_add
-
-    mov esi, curve25519_fe_out
-    mov edi, curve25519_private_key
-    mov edx, curve25519_fe_b
-    call curve25519_fe_sub
-
-    mov esi, curve25519_fe_b
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov esi, curve25519_fe_out
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov esi, curve25519_private_key
-    mov edx, curve25519_fe_out
-    call curve25519_fe_square
-
-    mov esi, curve25519_fe_out
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov edi, curve25519_fe_out
-    call curve25519_fe_zero
-
-    mov esi, curve25519_fe_out
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov edi, curve25519_fe_out
-    call curve25519_fe_one
-
-    mov esi, curve25519_fe_out
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov al, 9
-    mov edi, curve25519_fe_out
-    call curve25519_fe_set_small
-
-    mov esi, curve25519_fe_out
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov al, 9
-    mov edi, curve25519_fe_a
-    call curve25519_fe_set_small
-
-    mov esi, curve25519_fe_a
-    mov edx, curve25519_fe_out
-    call curve25519_fe_square
-
-    mov esi, curve25519_fe_out
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov al, 9
-    mov edi, curve25519_fe_a
-    call curve25519_fe_set_small
-
-    mov esi, curve25519_fe_a
-    mov edi, curve25519_fe_a
     mov edx, curve25519_fe_out
     call curve25519_fe_mul
 
@@ -591,7 +502,7 @@ curve25519_fe_cswap:
 curve25519_fe_invert:
     ; ESI = input field element
     ; EDI = output field element
-    ; Skeleton only: this is not the full RFC7748 z^(p-2) chain yet.
+    ; Computes z^(2^255 - 21), i.e. z^(p-2) for p = 2^255 - 19.
 
     pushad
 
@@ -602,29 +513,139 @@ curve25519_fe_invert:
     mov edx, curve25519_inv_t0
     call curve25519_fe_square
 
-    ; t1 = z^3
+    ; t1 = z^8
     mov esi, curve25519_inv_t0
-    mov edi, [curve25519_inv_input_ptr]
+    mov edx, curve25519_inv_t1
+    call curve25519_fe_square
+    mov esi, curve25519_inv_t1
+    mov edx, curve25519_inv_t1
+    call curve25519_fe_square
+
+    ; t1 = z^9
+    mov esi, [curve25519_inv_input_ptr]
+    mov edi, curve25519_inv_t1
     mov edx, curve25519_inv_t1
     call curve25519_fe_mul
 
-    ; t2 = z^6
+    ; t2 = z^11, keep a copy in t3 for the final multiply
     mov esi, curve25519_inv_t1
+    mov edi, curve25519_inv_t0
+    mov edx, curve25519_inv_t2
+    call curve25519_fe_mul
+    mov esi, curve25519_inv_t2
+    mov edi, curve25519_inv_t3
+    call curve25519_fe_copy
+
+    ; t0 = z^(2^5 - 1)
+    mov esi, curve25519_inv_t2
     mov edx, curve25519_inv_t2
     call curve25519_fe_square
-
-    ; t3 = z^9
     mov esi, curve25519_inv_t2
     mov edi, curve25519_inv_t1
-    mov edx, curve25519_inv_t3
+    mov edx, curve25519_inv_t0
     call curve25519_fe_mul
 
-    ; out = z^11 placeholder, proving the square/mul pipeline.
-    mov esi, curve25519_inv_t3
+    ; t0 = z^(2^10 - 1)
+    mov esi, curve25519_inv_t0
+    mov ecx, 5
+    mov edi, curve25519_inv_t2
+    call curve25519_fe_square_n
+    mov esi, curve25519_inv_t2
     mov edi, curve25519_inv_t0
+    mov edx, curve25519_inv_t0
+    call curve25519_fe_mul
+
+    ; t1 = z^(2^20 - 1)
+    mov esi, curve25519_inv_t0
+    mov ecx, 10
+    mov edi, curve25519_inv_t2
+    call curve25519_fe_square_n
+    mov esi, curve25519_inv_t2
+    mov edi, curve25519_inv_t0
+    mov edx, curve25519_inv_t1
+    call curve25519_fe_mul
+
+    ; t1 = z^(2^40 - 1)
+    mov esi, curve25519_inv_t1
+    mov ecx, 20
+    mov edi, curve25519_inv_t2
+    call curve25519_fe_square_n
+    mov esi, curve25519_inv_t2
+    mov edi, curve25519_inv_t1
+    mov edx, curve25519_inv_t1
+    call curve25519_fe_mul
+
+    ; t0 = z^(2^50 - 1)
+    mov esi, curve25519_inv_t1
+    mov ecx, 10
+    mov edi, curve25519_inv_t2
+    call curve25519_fe_square_n
+    mov esi, curve25519_inv_t2
+    mov edi, curve25519_inv_t0
+    mov edx, curve25519_inv_t0
+    call curve25519_fe_mul
+
+    ; t1 = z^(2^100 - 1)
+    mov esi, curve25519_inv_t0
+    mov ecx, 50
+    mov edi, curve25519_inv_t2
+    call curve25519_fe_square_n
+    mov esi, curve25519_inv_t2
+    mov edi, curve25519_inv_t0
+    mov edx, curve25519_inv_t1
+    call curve25519_fe_mul
+
+    ; t1 = z^(2^200 - 1)
+    mov esi, curve25519_inv_t1
+    mov ecx, 100
+    mov edi, curve25519_inv_t2
+    call curve25519_fe_square_n
+    mov esi, curve25519_inv_t2
+    mov edi, curve25519_inv_t1
+    mov edx, curve25519_inv_t1
+    call curve25519_fe_mul
+
+    ; t0 = z^(2^250 - 1)
+    mov esi, curve25519_inv_t1
+    mov ecx, 50
+    mov edi, curve25519_inv_t2
+    call curve25519_fe_square_n
+    mov esi, curve25519_inv_t2
+    mov edi, curve25519_inv_t0
+    mov edx, curve25519_inv_t0
+    call curve25519_fe_mul
+
+    ; out = z^(2^255 - 21)
+    mov esi, curve25519_inv_t0
+    mov ecx, 5
+    mov edi, curve25519_inv_t2
+    call curve25519_fe_square_n
+    mov esi, curve25519_inv_t2
+    mov edi, curve25519_inv_t3
     mov edx, [curve25519_inv_out_ptr]
     call curve25519_fe_mul
 
+    popad
+    ret
+
+curve25519_fe_square_n:
+    ; ESI = input, ECX = number of squares, EDI = output
+
+    pushad
+
+    call curve25519_fe_copy
+    sub edi, 32
+
+.loop:
+    cmp ecx, 0
+    je .done
+    mov esi, edi
+    mov edx, edi
+    call curve25519_fe_square
+    dec ecx
+    jmp .loop
+
+.done:
     popad
     ret
 

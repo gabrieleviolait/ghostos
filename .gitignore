@@ -2,10 +2,15 @@
 build/
 iso/
 
+# Temporary test dumps
+*.bin
+
 # Runtime artifacts
 *.log
 *.dump
 *.pcap
+
+# Local captures
 ghostos.pcap
 
 # Local launchers

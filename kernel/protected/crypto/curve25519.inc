@@ -15,6 +15,9 @@ x25519_field_mul_msg db 'Fm ',0
 x25519_field_square_msg db 'Fq ',0
 x25519_field_p_msg db 'Fp ',0
 x25519_field_p1_msg db 'F1 ',0
+x25519_field_neg_msg db 'Fn ',0
+x25519_field_neg_square_msg db 'Fnq ',0
+x25519_field_neg_z_msg db 'Fnz ',0
 x25519_inv_one_msg db 'Fi1 ',0
 x25519_inv_nine_msg db 'Fi9 ',0
 x25519_inv_x_msg db 'Fix ',0
@@ -22,33 +25,6 @@ x25519_ladder_init_msg db 'Li ',0
 x25519_ladder_swap_msg db 'Ls ',0
 x25519_ladder_bits_msg db 'Lb ',0
 x25519_ladder_step_msg db 'L1 ',0
-x25519_ladder_a_msg db 'LA ',0
-x25519_ladder_c_msg db 'LC ',0
-x25519_ladder_x_msg db 'LX ',0
-x25519_ladder_z_msg db 'LZ ',0
-
-x25519_ladder_a_table:
-    dd x25519_A
-    db 1
-    dd x25519_AA
-    db 1
-    dd x25519_B
-    db 1
-    dd x25519_BB
-    db 1
-    dd x25519_E
-    db 0
-
-x25519_ladder_c_table:
-    dd x25519_C
-    db 10
-    dd x25519_D
-    db 8
-    dd x25519_DA
-    db 8
-    dd x25519_CB
-    db 10
-
 ; RFC7748 section 5.2 X25519 test vectors.
 x25519_rfc7748_alice_private:
     db 077h, 007h, 06Dh, 00Ah, 073h, 018h, 0A5h, 07Dh
@@ -335,6 +311,43 @@ x25519_field_selftest:
     mov esi, x25519_field_p1_msg
     call x25519_rfc7748_print_result
 
+    mov al, 8
+    mov edi, curve25519_fe_a
+    call curve25519_fe_set_small
+    mov al, 10
+    mov edi, curve25519_fe_b
+    call curve25519_fe_set_small
+    mov esi, curve25519_fe_a
+    mov edi, curve25519_fe_b
+    mov edx, curve25519_fe_out
+    call curve25519_fe_sub
+    mov esi, curve25519_fe_out
+    call curve25519_fe_is_p_minus_2
+    mov esi, x25519_field_neg_msg
+    call x25519_rfc7748_print_result
+
+    mov esi, curve25519_fe_out
+    mov edx, curve25519_fe_b
+    call curve25519_fe_square
+    mov esi, curve25519_fe_b
+    mov al, 4
+    call curve25519_fe_is_small
+    mov esi, x25519_field_neg_square_msg
+    call x25519_rfc7748_print_result
+
+    mov al, 9
+    mov edi, curve25519_fe_a
+    call curve25519_fe_set_small
+    mov esi, curve25519_fe_a
+    mov edi, curve25519_fe_b
+    mov edx, curve25519_fe_out
+    call curve25519_fe_mul
+    mov esi, curve25519_fe_out
+    mov eax, 36
+    call curve25519_fe_is_u32
+    mov esi, x25519_field_neg_z_msg
+    call x25519_rfc7748_print_result
+
     popad
     ret
 
@@ -399,23 +412,6 @@ x25519_ladder_selftest:
     call x25519_rfc7748_print_result
 
     call x25519_ladder_check_step_once
-    cmp eax, 1
-    je .print_l1
-    call x25519_ladder_check_a_group
-    mov esi, x25519_ladder_a_msg
-    call x25519_rfc7748_print_result
-    call x25519_ladder_check_c_group
-    mov esi, x25519_ladder_c_msg
-    call x25519_rfc7748_print_result
-    call x25519_ladder_check_x3
-    mov esi, x25519_ladder_x_msg
-    call x25519_rfc7748_print_result
-    call x25519_ladder_check_z3
-    mov esi, x25519_ladder_z_msg
-    call x25519_rfc7748_print_result
-    xor eax, eax
-
-.print_l1:
     mov esi, x25519_ladder_step_msg
     call x25519_rfc7748_print_result
 
@@ -567,18 +563,6 @@ x25519_ladder_check_step_once:
     xor eax, eax
     ret
 
-x25519_ladder_check_a_group:
-    mov edi, x25519_ladder_a_table
-    mov edx, 5
-    call x25519_check_small_table
-    ret
-
-x25519_ladder_check_c_group:
-    mov edi, x25519_ladder_c_table
-    mov edx, 4
-    call x25519_check_small_table
-    ret
-
 x25519_ladder_check_x3:
     mov esi, x25519_x3
     mov eax, 324
@@ -589,21 +573,6 @@ x25519_ladder_check_z3:
     mov esi, x25519_z3
     mov eax, 36
     call curve25519_fe_is_u32
-    ret
-
-x25519_check_small_table:
-    mov esi, [edi]
-    mov al, [edi + 4]
-    call curve25519_fe_is_small
-    cmp eax, 1
-    jne .fail
-    add edi, 5
-    dec edx
-    jnz x25519_check_small_table
-    ret
-
-.fail:
-    xor eax, eax
     ret
 
 x25519_ladder_loop_skeleton:
@@ -867,6 +836,27 @@ curve25519_fe_is_u32:
     dec ecx
     jnz .loop
     mov eax, 1
+
+.done:
+    ret
+
+curve25519_fe_is_p_minus_2:
+    mov eax, 0
+    cmp byte [esi], 235
+    jne .done
+    inc esi
+    mov ecx, 30
+
+.mid:
+    cmp byte [esi], 255
+    jne .done
+    inc esi
+    dec ecx
+    jnz .mid
+
+    cmp byte [esi], 127
+    jne .done
+    inc eax
 
 .done:
     ret
@@ -1143,11 +1133,12 @@ curve25519_fe_sub:
     ; ESI = a
     ; EDI = b
     ; EDX = out
-    ; subtraction with borrow propagation
+    ; subtraction modulo p, with borrow compensated by adding p
 
     push ecx
     push eax
     push ebx
+    push edx
 
     mov ecx, 32
 
@@ -1168,6 +1159,32 @@ curve25519_fe_sub:
     dec ecx
     jnz .loop
 
+    jnc .done
+
+    pop edx
+    push edx
+
+    clc
+    mov al, [edx]
+    add al, 237
+    mov [edx], al
+    inc edx
+    mov ecx, 30
+
+.add_mid:
+    mov al, [edx]
+    adc al, 255
+    mov [edx], al
+    inc edx
+    dec ecx
+    jnz .add_mid
+
+    mov al, [edx]
+    adc al, 127
+    mov [edx], al
+
+.done:
+    pop edx
     pop ebx
     pop eax
     pop ecx

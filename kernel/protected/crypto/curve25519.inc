@@ -17,6 +17,9 @@ x25519_b9_msg db 'B9',0
 x25519_fia_msg db 'FIA',0
 x25519_fib_msg db 'FIB',0
 x25519_iza_msg db 'IZA',0
+x25519_x2a_msg db 'X2A ',0
+x25519_z2a_msg db 'Z2A ',0
+x25519_iva_msg db 'IVA ',0
 x25519_u1x_msg db 'U1X',0
 x25519_u1z_msg db 'U1Z',0
 x25519_csb_msg db 'CSB',0
@@ -30,6 +33,10 @@ x25519_scalar_a_msg db 'SA',0
 x25519_scalar_b_msg db 'SB',0
 x25519_rfc_shared_ab_msg db 'AB',0
 x25519_rfc_shared_ba_msg db 'BA',0
+x25519_abc_msg db 'ABC ',0
+x25519_exp_msg db 'EXP ',0
+x25519_diff_msg db 'DIF ',0
+x25519_abn_msg db 'ABN',0
 x25519_shared_init_msg db 'I',0
 x25519_x1b_msg db 'X1B',0
 x25519_rfc_final_msg db 'R',0
@@ -62,9 +69,9 @@ x25519_rfc7748_bob_public:
 
 x25519_rfc7748_shared:
     db 04Ah, 05Dh, 09Dh, 05Bh, 0A4h, 0CEh, 02Dh, 0E1h
-    db 072h, 08Eh, 03Bh, 0F4h, 080h, 035h, 0F2h, 05Eh
-    db 007h, 0E2h, 01Ch, 094h, 07Dh, 019h, 0E3h, 037h
-    db 06Fh, 009h, 0B3h, 0C1h, 0E1h, 061h, 074h, 042h
+    db 072h, 08Eh, 03Bh, 0F4h, 080h, 035h, 00Fh, 025h
+    db 0E0h, 07Eh, 021h, 0C9h, 047h, 0D1h, 09Eh, 033h
+    db 076h, 0F0h, 09Bh, 03Ch, 01Eh, 016h, 017h, 042h
 
 curve25519_private_key times 32 db 0
 curve25519_public_key  times 32 db 0
@@ -94,6 +101,7 @@ x25519_u16_x_run1 times 32 db 0
 x25519_u16_z_run1 times 32 db 0
 x25519_u16_x_run2 times 32 db 0
 x25519_u16_z_run2 times 32 db 0
+x25519_ab_norm times 32 db 0
 curve25519_fe_a times 32 db 0
 curve25519_fe_b times 32 db 0
 curve25519_fe_out times 32 db 0
@@ -482,6 +490,27 @@ x25519_rfc7748_validate:
     mov esi, x25519_iza_msg
     call x25519_rfc7748_print_result
 
+    ; Dump final AB projective/finalization buffers
+    mov esi, x25519_x2a_msg
+    call pm_print_string
+    call pm_newline
+    mov esi, x25519_x2
+    call x25519_print_32
+
+    mov esi, x25519_z2a_msg
+    call pm_print_string
+    call pm_newline
+    mov esi, x25519_z2
+    call x25519_print_32
+
+    mov esi, x25519_iva_msg
+    call pm_print_string
+    call pm_newline
+    mov esi, curve25519_fe_out
+    call x25519_print_32
+
+    call pm_more_pause
+
     ; U1B: first ladder step with x1 = BobPublic
     ; expected x3 = 4*x1^2, expected z3 = 4*x1
 
@@ -850,6 +879,44 @@ x25519_rfc7748_validate:
     mov esi, x25519_rfc_shared_ab_msg
     call x25519_rfc7748_print_result
 
+    ; ABN: normalize computed AB once more and compare with expected
+    mov esi, x25519_shared_ab
+    mov edi, x25519_ab_norm
+    call curve25519_fe_copy
+
+    mov esi, x25519_ab_norm
+    call curve25519_bytes_to_mul_temp
+    call curve25519_fe_normalize
+    mov edi, x25519_ab_norm
+    call curve25519_mul_temp_copy_low32
+
+    mov esi, x25519_ab_norm
+    mov edi, x25519_rfc7748_shared
+    call curve25519_memcmp32
+    mov esi, x25519_abn_msg
+    call x25519_rfc7748_print_result
+
+    ; Full dump: computed AB
+    mov esi, x25519_abc_msg
+    call pm_print_string
+    call pm_newline
+    mov esi, x25519_shared_ab
+    call x25519_print_32
+
+    ; Full dump: expected shared
+    mov esi, x25519_exp_msg
+    call pm_print_string
+    call pm_newline
+    mov esi, x25519_rfc7748_shared
+    call x25519_print_32
+
+    ; First differing byte: index computed expected
+    mov esi, x25519_shared_ab
+    mov edi, x25519_rfc7748_shared
+    call x25519_print_first_diff
+
+    call pm_more_pause
+
     mov esi, x25519_shared_ba
     mov edi, x25519_rfc7748_shared
     call curve25519_memcmp32
@@ -871,6 +938,134 @@ x25519_rfc7748_validate:
     mov esi, x25519_rfc_final_msg
     call x25519_rfc7748_print_result
 
+    popad
+    ret
+
+curve25519_bytes_to_mul_temp:
+    ; ESI = 32-byte buffer
+    ; converts bytes to curve25519_mul_temp dword slots
+    pushad
+
+    mov edi, curve25519_mul_temp
+    mov ecx, 32
+
+.bt_loop:
+    xor eax, eax
+    mov al, [esi]
+    mov [edi], eax
+    inc esi
+    add edi, 4
+    dec ecx
+    jnz .bt_loop
+
+    popad
+    ret
+
+x25519_print_edge8:
+    ; ESI = 32-byte buffer
+    ; prints first 4 bytes, '..', last 4 bytes
+    pushad
+
+    mov ecx, 4
+
+.first:
+    lodsb
+    call pm_print_hex8
+    mov al, ' '
+    call pm_print_char
+    loop .first
+
+    mov al, '.'
+    call pm_print_char
+    mov al, '.'
+    call pm_print_char
+    mov al, ' '
+    call pm_print_char
+
+    add esi, 24
+    mov ecx, 4
+
+.last:
+    lodsb
+    call pm_print_hex8
+    mov al, ' '
+    call pm_print_char
+    loop .last
+
+    call pm_newline
+
+    popad
+    ret
+
+x25519_print_32:
+    ; ESI = 32-byte buffer
+    ; prints 32 bytes as 4 lines of 8 bytes
+    pushad
+
+    mov ebx, 4
+
+.row:
+    mov ecx, 8
+
+.col:
+    lodsb
+    call pm_print_hex8
+    mov al, ' '
+    call pm_print_char
+    loop .col
+
+    call pm_newline
+    dec ebx
+    jnz .row
+
+    popad
+    ret
+
+x25519_print_first_diff:
+    ; ESI = computed
+    ; EDI = expected
+    ; prints: DIF index computed expected
+    pushad
+
+    mov ebx, 0
+
+.diff_loop:
+    cmp ebx, 32
+    jge .done
+
+    mov al, [esi + ebx]
+    mov dl, [edi + ebx]
+    cmp al, dl
+    jne .found
+
+    inc ebx
+    jmp .diff_loop
+
+.found:
+    mov esi, x25519_diff_msg
+    call pm_print_string
+
+    mov eax, ebx
+    call pm_print_uint32
+
+    mov al, ' '
+    call pm_print_char
+
+    mov al, [esp + 28] ; dummy-safe overwrite below avoided by reloading pointers impossible after pushad
+    ; Reload original computed/expected pointers from pushad stack is messy,
+    ; so use global known buffers for this diagnostic:
+    mov al, [x25519_shared_ab + ebx]
+    call pm_print_hex8
+
+    mov al, ' '
+    call pm_print_char
+
+    mov al, [x25519_rfc7748_shared + ebx]
+    call pm_print_hex8
+
+    call pm_newline
+
+.done:
     popad
     ret
 

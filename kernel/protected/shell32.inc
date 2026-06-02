@@ -749,6 +749,16 @@ pm_print_stack:
     loop .line
     ret
 
+pm_more_pause:
+    ; Simple pager pause. Press ENTER to continue.
+    pushad
+    mov esi, pm_more_msg
+    call pm_print_string
+    mov edi, pm_cmd_buffer
+    call pm_read_line
+    popad
+    ret
+
 pm_banner db 'ghost32',13,0
 pm_memory_prefix db 'mem ',0
 pm_memory_suffix db 13,0
@@ -790,6 +800,7 @@ pm_reg_ebp_msg db 'P',0
 pm_reg_esp_msg db 'T',0
 pm_stack_header_msg db 'stk',13,0
 pm_colon_space_msg db ' ',0
+pm_more_msg db '-- more -- ENTER',13,0
 pm_debug_regs_valid dd 0
 pm_debug_eax dd 0
 pm_debug_ebx dd 0

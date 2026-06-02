@@ -22,6 +22,32 @@ x25519_ladder_init_msg db 'Li ',0
 x25519_ladder_swap_msg db 'Ls ',0
 x25519_ladder_bits_msg db 'Lb ',0
 x25519_ladder_step_msg db 'L1 ',0
+x25519_ladder_a_msg db 'LA ',0
+x25519_ladder_c_msg db 'LC ',0
+x25519_ladder_x_msg db 'LX ',0
+x25519_ladder_z_msg db 'LZ ',0
+
+x25519_ladder_a_table:
+    dd x25519_A
+    db 1
+    dd x25519_AA
+    db 1
+    dd x25519_B
+    db 1
+    dd x25519_BB
+    db 1
+    dd x25519_E
+    db 0
+
+x25519_ladder_c_table:
+    dd x25519_C
+    db 10
+    dd x25519_D
+    db 8
+    dd x25519_DA
+    db 8
+    dd x25519_CB
+    db 10
 
 ; RFC7748 section 5.2 X25519 test vectors.
 x25519_rfc7748_alice_private:
@@ -373,6 +399,23 @@ x25519_ladder_selftest:
     call x25519_rfc7748_print_result
 
     call x25519_ladder_check_step_once
+    cmp eax, 1
+    je .print_l1
+    call x25519_ladder_check_a_group
+    mov esi, x25519_ladder_a_msg
+    call x25519_rfc7748_print_result
+    call x25519_ladder_check_c_group
+    mov esi, x25519_ladder_c_msg
+    call x25519_rfc7748_print_result
+    call x25519_ladder_check_x3
+    mov esi, x25519_ladder_x_msg
+    call x25519_rfc7748_print_result
+    call x25519_ladder_check_z3
+    mov esi, x25519_ladder_z_msg
+    call x25519_rfc7748_print_result
+    xor eax, eax
+
+.print_l1:
     mov esi, x25519_ladder_step_msg
     call x25519_rfc7748_print_result
 
@@ -508,13 +551,55 @@ x25519_ladder_check_step_once:
     mov al, 1
     call curve25519_fe_is_small
     cmp eax, 1
-    je .fail
+    jne .fail
     mov esi, x25519_z2
     xor al, al
     call curve25519_fe_is_small
     cmp eax, 1
-    je .fail
-    mov eax, 1
+    jne .fail
+    call x25519_ladder_check_x3
+    cmp eax, 1
+    jne .fail
+    call x25519_ladder_check_z3
+    ret
+
+.fail:
+    xor eax, eax
+    ret
+
+x25519_ladder_check_a_group:
+    mov edi, x25519_ladder_a_table
+    mov edx, 5
+    call x25519_check_small_table
+    ret
+
+x25519_ladder_check_c_group:
+    mov edi, x25519_ladder_c_table
+    mov edx, 4
+    call x25519_check_small_table
+    ret
+
+x25519_ladder_check_x3:
+    mov esi, x25519_x3
+    mov eax, 324
+    call curve25519_fe_is_u32
+    ret
+
+x25519_ladder_check_z3:
+    mov esi, x25519_z3
+    mov eax, 36
+    call curve25519_fe_is_u32
+    ret
+
+x25519_check_small_table:
+    mov esi, [edi]
+    mov al, [edi + 4]
+    call curve25519_fe_is_small
+    cmp eax, 1
+    jne .fail
+    add edi, 5
+    dec edx
+    jnz x25519_check_small_table
     ret
 
 .fail:
@@ -753,6 +838,27 @@ curve25519_fe_is_small:
     jne .done
     inc esi
     mov ecx, 31
+
+.loop:
+    cmp byte [esi], 0
+    jne .done
+    inc esi
+    dec ecx
+    jnz .loop
+    mov eax, 1
+
+.done:
+    ret
+
+curve25519_fe_is_u32:
+    ; ESI = field element, EAX = expected low dword, EAX = match flag
+
+    mov ebx, eax
+    xor eax, eax
+    cmp [esi], ebx
+    jne .done
+    add esi, 4
+    mov ecx, 28
 
 .loop:
     cmp byte [esi], 0

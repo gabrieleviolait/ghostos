@@ -749,31 +749,31 @@ pm_print_stack:
     loop .line
     ret
 
-pm_banner db 'GhostOS ghost32',13,13,0
-pm_memory_prefix db 'Mem ',0
-pm_memory_suffix db ' MB',13,0
-pm_heap_ready_msg db 'Heap OK',13,0
-pm_prompt db 'ghost32> ',0
-pm_help_msg db 'help cls mem pingtest rfc7748test',13,0
-pm_version_msg db 'v1.5.5',13,0
+pm_banner db 'g',13,0
+pm_memory_prefix db 0
+pm_memory_suffix db 13,0
+pm_heap_ready_msg db 13,0
+pm_prompt db 0
+pm_help_msg db 0
+pm_version_msg db 0
 pm_unknown_msg db '?',13,0
-pm_halt_msg db 'System halted.',13,0
-pm_run_usage_msg db 'Usage: run HELLO.GEX [args]',13,0
-pm_uptime_msg db 'Uptime ticks: ',0
-pm_ticks_msg db ' ticks',13,0
-pm_panic_command_msg db 'panic command invoked',0
-pm_regs_empty_msg db 'No register snapshot available.',13,0
-pm_regs_header_msg db 'Debug register snapshot:',13,0
-pm_reg_eax_msg db 'EAX=',0
-pm_reg_ebx_msg db 'EBX=',0
-pm_reg_ecx_msg db 'ECX=',0
-pm_reg_edx_msg db 'EDX=',0
-pm_reg_esi_msg db 'ESI=',0
-pm_reg_edi_msg db 'EDI=',0
-pm_reg_ebp_msg db 'EBP=',0
-pm_reg_esp_msg db 'ESP=',0
-pm_stack_header_msg db 'Stack dump:',13,0
-pm_colon_space_msg db ': ',0
+pm_halt_msg db 0
+pm_run_usage_msg db 'run GEX',13,0
+pm_uptime_msg db 'T ',0
+pm_ticks_msg db 13,0
+pm_panic_command_msg db 'panic',0
+pm_regs_empty_msg db 'no regs',13,0
+pm_regs_header_msg db 'regs',13,0
+pm_reg_eax_msg db 'A',0
+pm_reg_ebx_msg db 'B',0
+pm_reg_ecx_msg db 'C',0
+pm_reg_edx_msg db 'D',0
+pm_reg_esi_msg db 'S',0
+pm_reg_edi_msg db 'I',0
+pm_reg_ebp_msg db 'P',0
+pm_reg_esp_msg db 'T',0
+pm_stack_header_msg db 'stk',13,0
+pm_colon_space_msg db ' ',0
 pm_debug_regs_valid dd 0
 pm_debug_eax dd 0
 pm_debug_ebx dd 0

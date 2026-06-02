@@ -29,73 +29,11 @@ x25519test:
 
     call x25519_generate_public_skeleton
 
-    mov esi, x25519_rfc7748_u_coordinate
+    mov esi, x25519_rfc7748_bob_public
     mov edi, x25519_peer_public_key
     call curve25519_fe_copy
 
-    mov esi, x25519_loop_count_msg
-    call pm_print_string
-    mov eax, [x25519_loop_count]
-    call pm_print_uint32
-    call pm_newline
-
-    mov esi, x25519_last_bit_msg
-    call pm_print_string
-    movzx eax, byte [x25519_last_bit]
-    call pm_print_uint32
-    call pm_newline
-
-    mov esi, x25519_swap_state_msg
-    call pm_print_string
-    movzx eax, byte [x25519_swap_state]
-    call pm_print_uint32
-    call pm_newline
-
-    mov esi, x25519_final_state_msg
-    call pm_print_string
-    mov esi, x25519_x2_msg
-    call pm_print_string
-    mov esi, x25519_x2
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov esi, x25519_z2_msg
-    call pm_print_string
-    mov esi, x25519_z2
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov esi, x25519_x3_msg
-    call pm_print_string
-    mov esi, x25519_x3
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov esi, x25519_z3_msg
-    call pm_print_string
-    mov esi, x25519_z3
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov esi, x25519_inversion_result_msg
-    call pm_print_string
-    mov esi, curve25519_fe_out
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
-    mov esi, x25519_public_key_msg
-    call pm_print_string
-    mov esi, curve25519_public_key
-    mov ecx, 32
-    call rtl8139_dump_bytes
-
     call x25519_generate_shared_secret_skeleton
-
-    mov esi, x25519_shared_secret_msg
-    call pm_print_string
-    mov esi, x25519_shared_secret
-    mov ecx, 32
-    call rtl8139_dump_bytes
 
     mov esi, x25519_rfc7748_pending_msg
     call pm_print_string
@@ -104,18 +42,13 @@ x25519test:
 
 curve25519_test_msg db 'GhostCrypto Curve25519 stub',13,0
 x25519_test_msg db 'GhostCrypto X25519 ladder loop skeleton',13,0
-x25519_loop_count_msg db 'loop_count = ',0
-x25519_last_bit_msg db 'last_bit = ',0
-x25519_swap_state_msg db 'swap_state = ',0
-x25519_final_state_msg db 'final ladder state',13,0
-x25519_inversion_result_msg db 'inversion result = ',0
-x25519_public_key_msg db 'public key = ',0
-x25519_shared_secret_msg db 'shared secret = ',0
 x25519_rfc7748_pending_msg db 'RFC7748 validation pending',13,0
-x25519_x2_msg db 'x2 = ',0
-x25519_z2_msg db 'z2 = ',0
-x25519_x3_msg db 'x3 = ',0
-x25519_z3_msg db 'z3 = ',0
+x25519_rfc_alice_msg db 'Alice PK: ',0
+x25519_rfc_bob_msg db 'Bob PK: ',0
+x25519_rfc_shared_msg db 'Shared: ',0
+x25519_rfc_final_msg db 'RFC7748: ',0
+x25519_rfc_pass_msg db 'PASS',13,0
+x25519_rfc_fail_msg db 'FAIL',13,0
 
 x25519_test_scalar:
     db 01h, 02h, 03h, 04h, 05h, 06h, 07h, 08h
@@ -123,22 +56,36 @@ x25519_test_scalar:
     db 11h, 12h, 13h, 14h, 15h, 16h, 17h, 18h
     db 19h, 1Ah, 1Bh, 1Ch, 1Dh, 1Eh, 1Fh, 20h
 
-; RFC7748 section 5.2 X25519 test vector data, stored for plumbing only.
-; Validation is intentionally pending until full inversion/reduction exist.
-x25519_rfc7748_scalar:
-    db 0A5h, 046h, 0E3h, 06Bh, 0F0h, 052h, 07Ch, 09Dh
-    db 03Bh, 016h, 015h, 04Bh, 082h, 046h, 05Eh, 0DDh
-    db 062h, 014h, 04Ch, 00Ah, 0C1h, 0FCh, 05Ah, 018h
-    db 050h, 06Ah, 022h, 044h, 0BAh, 044h, 09Ah, 0C4h
+; RFC7748 section 5.2 X25519 test vectors.
+x25519_rfc7748_alice_private:
+    db 077h, 007h, 06Dh, 00Ah, 073h, 018h, 0A5h, 07Dh
+    db 03Ch, 016h, 0C1h, 072h, 051h, 0B2h, 066h, 045h
+    db 0DFh, 04Ch, 02Fh, 087h, 0EBh, 0C0h, 099h, 02Ah
+    db 0B1h, 077h, 0FBh, 0A5h, 01Dh, 0B9h, 02Ch, 02Ah
 
-x25519_rfc7748_u_coordinate:
-    db 0E6h, 0DBh, 068h, 067h, 058h, 030h, 030h, 0DBh
-    db 035h, 094h, 0C1h, 0A4h, 024h, 0B1h, 05Fh, 07Ch
-    db 072h, 066h, 024h, 0ECh, 026h, 0B3h, 035h, 03Bh
-    db 010h, 0A9h, 003h, 0A6h, 0D0h, 0ABh, 01Ch, 04Ch
+x25519_rfc7748_alice_public:
+    db 085h, 020h, 0F0h, 009h, 089h, 030h, 0A7h, 054h
+    db 074h, 08Bh, 07Dh, 0DCh, 0B4h, 03Eh, 0F7h, 05Ah
+    db 00Dh, 0BFh, 03Ah, 00Dh, 026h, 038h, 01Ah, 0F4h
+    db 0EBh, 0A4h, 0A9h, 08Eh, 0AAh, 09Bh, 04Eh, 06Ah
 
-; Expected output placeholder/comment:
-; c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552
+x25519_rfc7748_bob_private:
+    db 05Dh, 0ABh, 008h, 07Eh, 062h, 04Ah, 08Ah, 04Bh
+    db 079h, 0E1h, 07Fh, 08Bh, 083h, 080h, 00Eh, 0E6h
+    db 06Fh, 03Bh, 0B1h, 029h, 026h, 018h, 0B6h, 0FDh
+    db 01Ch, 02Fh, 08Bh, 027h, 0FFh, 088h, 0E0h, 0EBh
+
+x25519_rfc7748_bob_public:
+    db 0DEh, 09Eh, 0DBh, 07Dh, 07Bh, 07Dh, 0C1h, 0B4h
+    db 0D3h, 05Bh, 061h, 0C2h, 0ECh, 0E4h, 035h, 037h
+    db 03Fh, 083h, 043h, 0C8h, 05Bh, 078h, 067h, 04Dh
+    db 0ADh, 0FCh, 07Eh, 014h, 06Fh, 088h, 02Bh, 04Fh
+
+x25519_rfc7748_shared:
+    db 04Ah, 05Dh, 09Dh, 05Bh, 0A4h, 0CEh, 02Dh, 0E1h
+    db 072h, 08Eh, 03Bh, 0F4h, 080h, 035h, 0F2h, 05Eh
+    db 007h, 0E2h, 01Ch, 094h, 07Dh, 019h, 0E3h, 037h
+    db 06Fh, 009h, 0B3h, 0C1h, 0E1h, 061h, 074h, 02h
 
 curve25519_private_key times 32 db 0
 curve25519_public_key  times 32 db 0
@@ -171,6 +118,7 @@ x25519_tmp3 times 32 db 0
 x25519_loop_count dd 0
 x25519_last_bit db 0
 x25519_swap_state db 0
+x25519_rfc_fail_flag db 0
 curve25519_inv_t0 times 32 db 0
 curve25519_inv_t1 times 32 db 0
 curve25519_inv_t2 times 32 db 0
@@ -249,6 +197,77 @@ x25519_generate_shared_secret_skeleton:
     call curve25519_fe_mul
 
     popad
+    ret
+
+x25519_rfc7748_validate:
+    pushad
+
+    mov byte [x25519_rfc_fail_flag], 0
+
+    mov esi, x25519_rfc7748_alice_private
+    mov edi, curve25519_private_key
+    call curve25519_fe_copy
+    call curve25519_clamp_private
+    call x25519_ladder_init
+    call x25519_generate_public_skeleton
+    mov esi, curve25519_public_key
+    mov edi, x25519_rfc7748_alice_public
+    call curve25519_memcmp32
+    mov esi, x25519_rfc_alice_msg
+    call x25519_rfc7748_print_result
+
+    mov esi, x25519_rfc7748_bob_private
+    mov edi, curve25519_private_key
+    call curve25519_fe_copy
+    call curve25519_clamp_private
+    call x25519_ladder_init
+    call x25519_generate_public_skeleton
+    mov esi, curve25519_public_key
+    mov edi, x25519_rfc7748_bob_public
+    call curve25519_memcmp32
+    mov esi, x25519_rfc_bob_msg
+    call x25519_rfc7748_print_result
+
+    mov esi, x25519_rfc7748_alice_private
+    mov edi, curve25519_private_key
+    call curve25519_fe_copy
+    call curve25519_clamp_private
+    mov esi, x25519_rfc7748_bob_public
+    mov edi, x25519_peer_public_key
+    call curve25519_fe_copy
+    call x25519_generate_shared_secret_skeleton
+    mov esi, x25519_shared_secret
+    mov edi, x25519_rfc7748_shared
+    call curve25519_memcmp32
+    mov esi, x25519_rfc_shared_msg
+    call x25519_rfc7748_print_result
+
+    mov eax, 1
+    cmp byte [x25519_rfc_fail_flag], 0
+    je .print_final
+    xor eax, eax
+
+.print_final:
+    mov esi, x25519_rfc_final_msg
+    call x25519_rfc7748_print_result
+
+    popad
+    ret
+
+x25519_rfc7748_print_result:
+    push eax
+    call pm_print_string
+    pop eax
+    cmp eax, 1
+    je .pass
+    mov byte [x25519_rfc_fail_flag], 1
+    mov esi, x25519_rfc_fail_msg
+    call pm_print_string
+    ret
+
+.pass:
+    mov esi, x25519_rfc_pass_msg
+    call pm_print_string
     ret
 
 x25519_ladder_loop_skeleton:
@@ -458,6 +477,37 @@ curve25519_fe_copy:
     dec ecx
     jnz .copy
 
+    pop ecx
+    ret
+
+curve25519_memcmp32:
+    ; ESI = buffer A
+    ; EDI = buffer B
+    ; EAX = 1 if equal, 0 if different
+
+    push ecx
+    push esi
+    push edi
+
+    mov eax, 1
+    mov ecx, 32
+
+.loop:
+    mov dl, [esi]
+    cmp dl, [edi]
+    jne .mismatch
+    inc esi
+    inc edi
+    dec ecx
+    jnz .loop
+    jmp .done
+
+.mismatch:
+    xor eax, eax
+
+.done:
+    pop edi
+    pop esi
     pop ecx
     ret
 

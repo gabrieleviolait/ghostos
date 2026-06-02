@@ -64,6 +64,7 @@ halt_cpu:
 %include "kernel/protected/crypto/hkdf_sha256.inc"
 %include "kernel/protected/crypto/rng.inc"
 %include "kernel/protected/crypto/curve25519.inc"
+%include "kernel/protected/tls/tls_key_schedule.inc"
 %include "kernel/protected/net/rtl8139.inc"
 %include "kernel/protected/syscalls.inc"
 %include "kernel/protected/gex.inc"

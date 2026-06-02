@@ -147,6 +147,12 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_hkdfsha256test
 
+    ; tlsscheduletest
+    mov esi, pm_cmd_buffer
+    mov edi, cmd_tlsscheduletest
+    call pm_starts_with_word
+    jc pm_do_tlsscheduletest
+
     mov edi, pm_cmd_rngtest
     call pm_starts_with_word
     jc pm_do_rngtest
@@ -475,6 +481,10 @@ pm_do_hkdfsha256test:
     call hkdf_sha256test
     jmp shell32_loop
 
+pm_do_tlsscheduletest:
+    call tls_key_schedule_test
+    jmp shell32_loop
+
 pm_do_rngtest:
     call rngtest
     jmp shell32_loop
@@ -779,6 +789,7 @@ pm_help_msg db \
 'CORE: help cls clear echo version',13,\
 'MEM: mem heapinfo memmap pages',13,\
 'CRYPTO: sha256test hmacsha256test hkdfsha256test rngtest rfc7748test',13,\
+'TLS: tlsscheduletest',13,\
 'PCI: lspci netdev regs stack uptime panic',13,\
 'NET: netup netstat netdiag netbar netreset netclear',13,\
 'MAC: mac setmac randommac',13,\
@@ -838,6 +849,7 @@ pm_cmd_netdev db 'netdev',0
 pm_cmd_sha256test db 'sha256test',0
 cmd_hmacsha256test db 'hmacsha256test',0
 cmd_hkdfsha256test db 'hkdfsha256test',0
+cmd_tlsscheduletest db 'tlsscheduletest',0
 pm_cmd_rngtest db 'rngtest',0
 pm_cmd_rfc7748test db 'rfc7748test',0
 pm_cmd_netbar db 'netbar',0

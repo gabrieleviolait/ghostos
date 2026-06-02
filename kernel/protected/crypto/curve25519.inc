@@ -11,6 +11,9 @@ x25519_fg0_msg db 'FG0',0
 x25519_fgq_msg db 'FGQ',0
 x25519_u5d_msg db 'U5D',0
 x25519_ubd_msg db 'UBD',0
+x25519_fp_msg db 'FP',0
+x25519_f1p_msg db 'F1P',0
+x25519_b9_msg db 'B9',0
 x25519_rfc_shared_msg db 'S',0
 x25519_rfc_shared_abba_msg db 'ABBA',0
 x25519_scalar_a_msg db 'SA',0
@@ -321,6 +324,64 @@ x25519_rfc7748_validate:
     mov edi, x25519_ub_run2
     call curve25519_memcmp32
     mov esi, x25519_ubd_msg
+    call x25519_rfc7748_print_result
+
+    ; FP: p * 1 == 0
+    mov al, 237
+    call curve25519_prepare_p_temp
+    mov edi, x25519_tmp0
+    call curve25519_mul_temp_copy_low32
+
+    mov edi, curve25519_fe_a
+    call curve25519_fe_one
+
+    mov esi, x25519_tmp0
+    mov edi, curve25519_fe_a
+    mov edx, x25519_tmp1
+    call curve25519_fe_mul
+
+    mov esi, x25519_tmp1
+    xor al, al
+    call curve25519_fe_is_small
+    mov esi, x25519_fp_msg
+    call x25519_rfc7748_print_result
+
+    ; F1P: (p + 1) * 1 == 1
+    mov al, 238
+    call curve25519_prepare_p_temp
+    mov edi, x25519_tmp0
+    call curve25519_mul_temp_copy_low32
+
+    mov edi, curve25519_fe_a
+    call curve25519_fe_one
+
+    mov esi, x25519_tmp0
+    mov edi, curve25519_fe_a
+    mov edx, x25519_tmp1
+    call curve25519_fe_mul
+
+    mov esi, x25519_tmp1
+    mov al, 1
+    call curve25519_fe_is_small
+    mov esi, x25519_f1p_msg
+    call x25519_rfc7748_print_result
+
+    ; B9: Alice scalar * basepoint via shared path == Alice public
+    mov esi, x25519_rfc7748_alice_private
+    mov edi, curve25519_private_key
+    call curve25519_fe_copy
+    call curve25519_clamp_private
+
+    mov esi, curve25519_basepoint
+    mov edi, x25519_peer_public_key
+    call curve25519_fe_copy
+
+    call x25519_generate_shared_secret_skeleton
+
+    mov esi, x25519_shared_secret
+    mov edi, x25519_rfc7748_alice_public
+    call curve25519_memcmp32
+    mov esi, x25519_b9_msg
     call x25519_rfc7748_print_result
 
     mov esi, x25519_rfc7748_bob_public

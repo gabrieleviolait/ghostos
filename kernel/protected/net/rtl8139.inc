@@ -867,6 +867,70 @@ rtl8139_tcprecv_cmd:
     call pm_print_string
     ret
 
+rtl8139_tcprecvall_cmd:
+    mov byte [rtl8139_tcprecvall_remaining], 8
+    mov dword [rtl8139_tcprecvall_segments], 0
+
+.next_segment:
+    cmp byte [rtl8139_tcprecvall_remaining], 0
+    je .done_all
+
+    dec byte [rtl8139_tcprecvall_remaining]
+    mov word [rtl8139_tcp_last_payload_len], 0
+
+    mov ecx, 40
+.poll:
+    push ecx
+    call rtl8139_wait_for_rx_activity
+    call rtl8139_rx_process_packet_quiet
+    pop ecx
+
+    cmp word [rtl8139_tcp_last_payload_len], 0
+    jne .found
+
+    loop .poll
+
+    cmp dword [rtl8139_tcprecvall_segments], 0
+    je .none
+
+    mov esi, rtl8139_tcprecvall_done_msg
+    call pm_print_string
+    ret
+
+.none:
+    mov esi, rtl8139_tcprecv_none_msg
+    call pm_print_string
+    ret
+
+.found:
+    inc dword [rtl8139_tcprecvall_segments]
+
+    mov esi, rtl8139_tcprecv_msg
+    call pm_print_string
+
+    mov esi, rtl8139_tcprecv_len_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_tcp_last_payload_len]
+    call pm_print_uint32
+    call pm_newline
+
+    call rtl8139_print_tcp_payload_ascii
+
+    call rtl8139_build_tcp_data_ack
+    call rtl8139_tx_submit_current_quiet
+    inc dword [rtl8139_tcp_tx_count]
+    inc dword [rtl8139_tcp_data_ack_tx_count]
+
+    mov esi, rtl8139_tcp_data_ack_sent_msg
+    call pm_print_string
+
+    jmp .next_segment
+
+.done_all:
+    mov esi, rtl8139_tcprecvall_done_msg
+    call pm_print_string
+    ret
+
 rtl8139_tcpstat:
     mov esi, rtl8139_tcpstat_msg
     call pm_print_string
@@ -4979,3 +5043,8 @@ rtl8139_tcp_payload_buffer times 256 db 0
 ; TCP data ACK messages
 rtl8139_tcp_data_ack_tx_msg db 'data_ack_tx=',0
 rtl8139_tcp_data_ack_sent_msg db 'TCP data ACK sent',13,0
+
+; TCP receive-all state/messages
+rtl8139_tcprecvall_remaining db 0
+rtl8139_tcprecvall_segments dd 0
+rtl8139_tcprecvall_done_msg db 'TCP RX all done',13,0

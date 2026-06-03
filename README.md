@@ -283,3 +283,12 @@ Use at your own risk.
 
 GhostOS does not currently guarantee confidentiality, authenticity, forward secrecy, anonymity, resistance to traffic analysis, or protection against active network attackers.
 
+
+## Screenshot
+
+![alt text]({7FA907F0-BCB0-44C0-B679-3FD336D40F3F}.png)
+![alt text](image-2.png)
+![alt text](image-1.png)
+![alt text](image.png)
+![alt text]({93119C78-D62E-4AF0-81C3-0C0CF63383EF}.png)
+![alt text]({670EBB3B-8E2F-49A9-B766-059C47C328E3}.png)

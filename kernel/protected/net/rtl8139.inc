@@ -116,6 +116,8 @@ rtl8139_tcp_rx_count dd 0
 rtl8139_tcp_synack_count dd 0
 rtl8139_tcp_ack_tx_count dd 0
 rtl8139_tcp_data_tx_count dd 0
+rtl8139_tcp_data_rx_count dd 0
+rtl8139_tcp_last_payload_len dw 0
 rtl8139_tcp_src_port dw 49153
 rtl8139_tcp_dst_port dw 80
 rtl8139_tcp_seq dd 01020304h
@@ -323,6 +325,8 @@ rtl8139_netreset:
     mov dword [rtl8139_tcp_synack_count], 0
     mov dword [rtl8139_tcp_ack_tx_count], 0
     mov dword [rtl8139_tcp_data_tx_count], 0
+    mov dword [rtl8139_tcp_data_rx_count], 0
+    mov word [rtl8139_tcp_last_payload_len], 0
     mov dword [rtl8139_tcp_last_src_ip], 0
     mov word [rtl8139_tcp_last_src_port], 0
     mov word [rtl8139_tcp_last_dst_port], 0
@@ -355,6 +359,8 @@ rtl8139_netclear:
     mov dword [rtl8139_tcp_synack_count], 0
     mov dword [rtl8139_tcp_ack_tx_count], 0
     mov dword [rtl8139_tcp_data_tx_count], 0
+    mov dword [rtl8139_tcp_data_rx_count], 0
+    mov word [rtl8139_tcp_last_payload_len], 0
     mov dword [rtl8139_tcp_last_src_ip], 0
     mov word [rtl8139_tcp_last_src_port], 0
     mov word [rtl8139_tcp_last_dst_port], 0
@@ -818,6 +824,38 @@ rtl8139_tcpget_cmd:
     call pm_print_string
     ret
 
+rtl8139_tcprecv_cmd:
+    mov word [rtl8139_tcp_last_payload_len], 0
+
+    mov ecx, 40
+.poll:
+    push ecx
+    call rtl8139_wait_for_rx_activity
+    call rtl8139_rx_process_packet_quiet
+    pop ecx
+
+    cmp word [rtl8139_tcp_last_payload_len], 0
+    jne .found
+
+    loop .poll
+
+    mov esi, rtl8139_tcprecv_none_msg
+    call pm_print_string
+    ret
+
+.found:
+    mov esi, rtl8139_tcprecv_msg
+    call pm_print_string
+
+    mov esi, rtl8139_tcprecv_len_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_tcp_last_payload_len]
+    call pm_print_uint32
+    call pm_newline
+
+    call rtl8139_print_tcp_payload_ascii
+    ret
+
 rtl8139_tcpstat:
     mov esi, rtl8139_tcpstat_msg
     call pm_print_string
@@ -853,6 +891,18 @@ rtl8139_tcpstat:
     mov esi, rtl8139_tcp_data_tx_msg
     call pm_print_string
     mov eax, [rtl8139_tcp_data_tx_count]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_tcp_data_rx_msg
+    call pm_print_string
+    mov eax, [rtl8139_tcp_data_rx_count]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_tcp_payload_len_msg
+    call pm_print_string
+    movzx eax, word [rtl8139_tcp_last_payload_len]
     call pm_print_uint32
     call pm_newline
 
@@ -4481,6 +4531,70 @@ rtl8139_rx_record_tcp_current:
     mov ax, [rtl8139_tcp_last_dst_port]
     cmp ax, [rtl8139_tcp_src_port]
     jne .done
+
+    ; If this packet belongs to the active TCP flow, compute payload length.
+    ; ESI points to Ethernet frame start.
+    ; IPv4 total length: [esi+16..17]
+    movzx eax, byte [esi + 16]
+    shl eax, 8
+    movzx edx, byte [esi + 17]
+    or eax, edx
+
+    ; IPv4 header length = low nibble of [esi+14] * 4
+    movzx ebx, byte [esi + 14]
+    and ebx, 0Fh
+    shl ebx, 2
+
+    cmp eax, ebx
+    jbe .check_synack
+    sub eax, ebx
+
+    ; TCP header length = high nibble of TCP data offset byte * 4
+    ; TCP starts at Ethernet 14 + IPv4 header length.
+    movzx ecx, byte [esi + 46]
+    shr ecx, 4
+    shl ecx, 2
+
+    cmp eax, ecx
+    jbe .check_synack
+    sub eax, ecx
+
+    cmp eax, 0
+    je .check_synack
+
+    ; Limit stored payload to 255 bytes and NUL terminate.
+    cmp eax, 255
+    jbe .payload_len_ok
+    mov eax, 255
+
+.payload_len_ok:
+    mov [rtl8139_tcp_last_payload_len], ax
+    inc dword [rtl8139_tcp_data_rx_count]
+
+    ; Payload pointer = frame + 14 + ip_header_len + tcp_header_len
+    mov edx, esi
+    add edx, 14
+    add edx, ebx
+    add edx, ecx
+
+    push esi
+    mov esi, edx
+    mov edi, rtl8139_tcp_payload_buffer
+    mov ecx, eax
+
+.copy_payload:
+    cmp ecx, 0
+    je .payload_done
+    lodsb
+    stosb
+    dec ecx
+    jmp .copy_payload
+
+.payload_done:
+    mov byte [edi], 0
+    pop esi
+
+.check_synack:
     mov al, [rtl8139_tcp_last_flags]
     and al, 12h
     cmp al, 12h
@@ -4540,6 +4654,52 @@ rtl8139_rx_discard_to_cbr:
     mov ax, [rtl8139_cbr_snapshot]
     mov [rtl8139_last_cbr], ax
 
+    popad
+    ret
+
+rtl8139_print_tcp_payload_ascii:
+    pushad
+
+    mov esi, rtl8139_tcp_payload_buffer
+    movzx ecx, word [rtl8139_tcp_last_payload_len]
+
+    cmp ecx, 255
+    jbe .loop
+    mov ecx, 255
+
+.loop:
+    cmp ecx, 0
+    je .done
+
+    lodsb
+
+    cmp al, 13
+    je .newline
+    cmp al, 10
+    je .newline
+
+    cmp al, 32
+    jb .dot
+    cmp al, 126
+    ja .dot
+
+    call pm_print_char
+    jmp .next
+
+.dot:
+    mov al, '.'
+    call pm_print_char
+    jmp .next
+
+.newline:
+    call pm_newline
+
+.next:
+    dec ecx
+    jmp .loop
+
+.done:
+    call pm_newline
     popad
     ret
 
@@ -4738,3 +4898,15 @@ rtl8139_tcp_http_get_payload:
     db 'Host: 10.0.2.2',13,10
     db 13,10
 rtl8139_tcp_http_get_len equ $ - rtl8139_tcp_http_get_payload
+
+; ============================================================
+; TCP payload receive/dump data/messages
+; Added for GhostNet TCP v0.2b
+; ============================================================
+
+rtl8139_tcp_data_rx_msg db 'data_rx=',0
+rtl8139_tcp_payload_len_msg db 'payload_len=',0
+rtl8139_tcprecv_msg db 'TCP RX data',13,0
+rtl8139_tcprecv_len_msg db 'len=',0
+rtl8139_tcprecv_none_msg db 'TCP RX data: none',13,0
+rtl8139_tcp_payload_buffer times 256 db 0

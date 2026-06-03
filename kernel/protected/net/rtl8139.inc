@@ -118,6 +118,8 @@ rtl8139_tcp_ack_tx_count dd 0
 rtl8139_tcp_data_tx_count dd 0
 rtl8139_tcp_data_rx_count dd 0
 rtl8139_tcp_data_ack_tx_count dd 0
+rtl8139_tcp_fin_rx_count dd 0
+rtl8139_tcp_fin_ack_tx_count dd 0
 rtl8139_tcp_last_payload_len dw 0
 rtl8139_tcp_src_port dw 49153
 rtl8139_tcp_dst_port dw 80
@@ -328,6 +330,8 @@ rtl8139_netreset:
     mov dword [rtl8139_tcp_data_tx_count], 0
     mov dword [rtl8139_tcp_data_rx_count], 0
     mov dword [rtl8139_tcp_data_ack_tx_count], 0
+    mov dword [rtl8139_tcp_fin_rx_count], 0
+    mov dword [rtl8139_tcp_fin_ack_tx_count], 0
     mov word [rtl8139_tcp_last_payload_len], 0
     mov dword [rtl8139_tcp_last_src_ip], 0
     mov word [rtl8139_tcp_last_src_port], 0
@@ -363,6 +367,8 @@ rtl8139_netclear:
     mov dword [rtl8139_tcp_data_tx_count], 0
     mov dword [rtl8139_tcp_data_rx_count], 0
     mov dword [rtl8139_tcp_data_ack_tx_count], 0
+    mov dword [rtl8139_tcp_fin_rx_count], 0
+    mov dword [rtl8139_tcp_fin_ack_tx_count], 0
     mov word [rtl8139_tcp_last_payload_len], 0
     mov dword [rtl8139_tcp_last_src_ip], 0
     mov word [rtl8139_tcp_last_src_port], 0
@@ -865,10 +871,21 @@ rtl8139_tcprecv_cmd:
 
     mov esi, rtl8139_tcp_data_ack_sent_msg
     call pm_print_string
+
+    mov al, [rtl8139_tcp_last_flags]
+    test al, 01h
+    jz .no_fin_single
+
+    inc dword [rtl8139_tcp_fin_ack_tx_count]
+    mov byte [rtl8139_tcp_state], TCP_STATE_CLOSED
+    mov esi, rtl8139_tcp_fin_ack_sent_msg
+    call pm_print_string
+
+.no_fin_single:
     ret
 
 rtl8139_tcprecvall_cmd:
-    mov byte [rtl8139_tcprecvall_remaining], 8
+    mov byte [rtl8139_tcprecvall_remaining], 32
     mov dword [rtl8139_tcprecvall_segments], 0
 
 .next_segment:
@@ -924,7 +941,18 @@ rtl8139_tcprecvall_cmd:
     mov esi, rtl8139_tcp_data_ack_sent_msg
     call pm_print_string
 
-    jmp .next_segment
+    mov al, [rtl8139_tcp_last_flags]
+    test al, 01h
+    jz .next_segment
+
+    inc dword [rtl8139_tcp_fin_ack_tx_count]
+    mov byte [rtl8139_tcp_state], TCP_STATE_CLOSED
+    mov esi, rtl8139_tcp_fin_ack_sent_msg
+    call pm_print_string
+
+    mov esi, rtl8139_tcp_fin_closed_msg
+    call pm_print_string
+    ret
 
 .done_all:
     mov esi, rtl8139_tcprecvall_done_msg
@@ -984,6 +1012,18 @@ rtl8139_tcpstat:
     mov esi, rtl8139_tcp_data_ack_tx_msg
     call pm_print_string
     mov eax, [rtl8139_tcp_data_ack_tx_count]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_tcp_fin_rx_msg
+    call pm_print_string
+    mov eax, [rtl8139_tcp_fin_rx_count]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_tcp_fin_ack_tx_msg
+    call pm_print_string
+    mov eax, [rtl8139_tcp_fin_ack_tx_count]
     call pm_print_uint32
     call pm_newline
 
@@ -1276,10 +1316,17 @@ rtl8139_build_tcp_data_ack:
     mov eax, [rtl8139_tcp_last_ack]
     call rtl8139_stos_be32
 
-    ; ACK number: peer sequence + payload length.
+    ; ACK number: peer sequence + payload length, plus 1 if FIN is set.
     mov eax, [rtl8139_tcp_last_seq]
     movzx edx, word [rtl8139_tcp_last_payload_len]
     add eax, edx
+
+    mov dl, [rtl8139_tcp_last_flags]
+    test dl, 01h
+    jz .no_fin_ack_seq
+    inc eax
+
+.no_fin_ack_seq:
     call rtl8139_stos_be32
 
     mov al, 50h
@@ -4654,6 +4701,11 @@ rtl8139_rx_record_tcp_current:
     mov [rtl8139_tcp_last_flags], al
     inc dword [rtl8139_tcp_rx_count]
 
+    test al, 01h
+    jz .no_fin_count
+    inc dword [rtl8139_tcp_fin_rx_count]
+.no_fin_count:
+
     mov ax, [rtl8139_tcp_last_src_port]
     cmp ax, [rtl8139_tcp_dst_port]
     jne .done
@@ -5048,3 +5100,9 @@ rtl8139_tcp_data_ack_sent_msg db 'TCP data ACK sent',13,0
 rtl8139_tcprecvall_remaining db 0
 rtl8139_tcprecvall_segments dd 0
 rtl8139_tcprecvall_done_msg db 'TCP RX all done',13,0
+
+; TCP FIN/close messages
+rtl8139_tcp_fin_rx_msg db 'fin_rx=',0
+rtl8139_tcp_fin_ack_tx_msg db 'fin_ack_tx=',0
+rtl8139_tcp_fin_ack_sent_msg db 'TCP FIN ACK sent',13,0
+rtl8139_tcp_fin_closed_msg db 'TCP state: CLOSED',13,0

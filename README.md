@@ -18,7 +18,7 @@ The project is developed as a learning and research platform to explore how mode
 | RTL8139 Driver              | ✅ Working      |
 | ARP / IPv4 / ICMP           | ✅ Working      |
 | UDP                         | ✅ Working      |
-| TCP Handshake               | ✅ Working      |
+| TCP Client Flow             | ✅ Working      |
 | SHA-256                     | ✅ Working      |
 | HMAC-SHA256                 | ✅ Working      |
 | HKDF-SHA256                 | ✅ Working      |
@@ -52,7 +52,12 @@ The project is developed as a learning and research platform to explore how mode
 * IPv4 packet processing
 * ICMP echo requests and replies
 * UDP packet transmission
-* TCP handshake implementation
+* TCP SYN / SYN-ACK / ACK handshake
+* TCP HTTP payload transmission
+* TCP payload receive and ASCII dump
+* Multi-segment TCP receive loop
+* ACK for received TCP payload data
+* TCP FIN receive and close handling
 * Packet validation using Wireshark
 
 ### Cryptography
@@ -134,9 +139,11 @@ Implemented:
 
 GhostOS is currently in an experimental phase.
 
-The networking stack is functional for low-level communication testing.
+The networking stack is functional for low-level communication testing and now includes a minimal TCP client flow over the RTL8139 driver in QEMU user networking.
 
-The cryptographic subsystem now includes RFC7748-validated X25519, RFC5869-validated HKDF-SHA256, and an experimental GhostTLS key schedule foundation. The project is evolving toward TLS record handling and privacy-oriented protocols.
+GhostNet currently supports ARP gateway discovery, ICMP ping testing, TCP connection establishment, HTTP `GET / HTTP/1.0` payload transmission, TCP payload receive/dump, multi-segment receive loops, ACKs for received payload data, and FIN close handling. This has been validated against a local Python HTTP server on `10.0.2.2:8080`.
+
+The cryptographic subsystem now includes RFC7748-validated X25519, RFC5869-validated HKDF-SHA256, and an experimental GhostTLS key schedule foundation. The project is evolving toward TLS record handling, ClientHello generation, and privacy-oriented protocols.
 
 ---
 
@@ -176,6 +183,16 @@ GhostOS now matches the RFC7748 X25519 public key/shared secret reference vector
 * ✅ PRK verification
 * ✅ OKM verification
 
+### GhostNet TCP v0.2 — Minimal TCP Client Flow
+
+* ✅ TCP SYN / SYN-ACK / ACK handshake
+* ✅ HTTP `GET / HTTP/1.0` payload send
+* ✅ TCP payload receive and ASCII dump
+* ✅ Multi-segment receive loop
+* ✅ ACK received TCP payload data
+* ✅ FIN receive and close handling
+* Next: TCP robustness refinements and TLS ClientHello transport
+
 ### GhostTLS v0.1 — Key Schedule Foundations
 
 * ✅ TLS-style key schedule skeleton
@@ -192,6 +209,8 @@ GhostOS now matches the RFC7748 X25519 public key/shared secret reference vector
 * Plaintext record formatting
 * ClientHello skeleton
 * Key share extension plumbing
+* Send ClientHello over the GhostNet TCP flow
+* Receive ServerHello / handshake records
 * Encrypted Records
 
 ### GhostTor

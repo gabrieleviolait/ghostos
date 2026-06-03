@@ -117,6 +117,7 @@ rtl8139_tcp_synack_count dd 0
 rtl8139_tcp_ack_tx_count dd 0
 rtl8139_tcp_data_tx_count dd 0
 rtl8139_tcp_data_rx_count dd 0
+rtl8139_tcp_data_ack_tx_count dd 0
 rtl8139_tcp_last_payload_len dw 0
 rtl8139_tcp_src_port dw 49153
 rtl8139_tcp_dst_port dw 80
@@ -326,6 +327,7 @@ rtl8139_netreset:
     mov dword [rtl8139_tcp_ack_tx_count], 0
     mov dword [rtl8139_tcp_data_tx_count], 0
     mov dword [rtl8139_tcp_data_rx_count], 0
+    mov dword [rtl8139_tcp_data_ack_tx_count], 0
     mov word [rtl8139_tcp_last_payload_len], 0
     mov dword [rtl8139_tcp_last_src_ip], 0
     mov word [rtl8139_tcp_last_src_port], 0
@@ -360,6 +362,7 @@ rtl8139_netclear:
     mov dword [rtl8139_tcp_ack_tx_count], 0
     mov dword [rtl8139_tcp_data_tx_count], 0
     mov dword [rtl8139_tcp_data_rx_count], 0
+    mov dword [rtl8139_tcp_data_ack_tx_count], 0
     mov word [rtl8139_tcp_last_payload_len], 0
     mov dword [rtl8139_tcp_last_src_ip], 0
     mov word [rtl8139_tcp_last_src_port], 0
@@ -854,6 +857,14 @@ rtl8139_tcprecv_cmd:
     call pm_newline
 
     call rtl8139_print_tcp_payload_ascii
+
+    call rtl8139_build_tcp_data_ack
+    call rtl8139_tx_submit_current_quiet
+    inc dword [rtl8139_tcp_tx_count]
+    inc dword [rtl8139_tcp_data_ack_tx_count]
+
+    mov esi, rtl8139_tcp_data_ack_sent_msg
+    call pm_print_string
     ret
 
 rtl8139_tcpstat:
@@ -903,6 +914,12 @@ rtl8139_tcpstat:
     mov esi, rtl8139_tcp_payload_len_msg
     call pm_print_string
     movzx eax, word [rtl8139_tcp_last_payload_len]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, rtl8139_tcp_data_ack_tx_msg
+    call pm_print_string
+    mov eax, [rtl8139_tcp_data_ack_tx_count]
     call pm_print_uint32
     call pm_newline
 
@@ -1151,6 +1168,54 @@ rtl8139_build_tcp_ack:
 
     mov eax, [rtl8139_tcp_last_seq]
     inc eax
+    call rtl8139_stos_be32
+
+    mov al, 50h
+    stosb
+    mov al, 10h
+    stosb
+    mov al, 40h
+    stosb
+    xor al, al
+    stosb
+    xor ax, ax
+    stosw
+    stosw
+
+    call rtl8139_finish_tcp_checksum
+    mov dword [rtl8139_tx_len], 60
+
+    popad
+    ret
+
+rtl8139_build_tcp_data_ack:
+    pushad
+
+    mov edi, rtl8139_tx_buffer
+    mov ecx, 2048
+    xor eax, eax
+    rep stosb
+
+    mov edi, rtl8139_tx_buffer
+    call rtl8139_write_ipv4_tcp_frame_prefix
+
+    mov ax, [rtl8139_tcp_src_port]
+    xchg al, ah
+    stosw
+
+    mov ax, [rtl8139_tcp_dst_port]
+    xchg al, ah
+    stosw
+
+    ; Sequence number: use ACK received from peer.
+    ; After our GET, peer ACK tells us the next seq it expects from us.
+    mov eax, [rtl8139_tcp_last_ack]
+    call rtl8139_stos_be32
+
+    ; ACK number: peer sequence + payload length.
+    mov eax, [rtl8139_tcp_last_seq]
+    movzx edx, word [rtl8139_tcp_last_payload_len]
+    add eax, edx
     call rtl8139_stos_be32
 
     mov al, 50h
@@ -4910,3 +4975,7 @@ rtl8139_tcprecv_msg db 'TCP RX data',13,0
 rtl8139_tcprecv_len_msg db 'len=',0
 rtl8139_tcprecv_none_msg db 'TCP RX data: none',13,0
 rtl8139_tcp_payload_buffer times 256 db 0
+
+; TCP data ACK messages
+rtl8139_tcp_data_ack_tx_msg db 'data_ack_tx=',0
+rtl8139_tcp_data_ack_sent_msg db 'TCP data ACK sent',13,0

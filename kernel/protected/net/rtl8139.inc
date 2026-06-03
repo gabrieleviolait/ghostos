@@ -734,6 +734,10 @@ rtl8139_tcpconnect_cmd:
     call pm_skip_first_word
     call pm_skip_spaces
 
+    mov edi, rtl8139_tcp_dst_port_4433_text
+    call pm_starts_with_word
+    jc .port_4433
+
     mov edi, rtl8139_tcp_dst_port_8080_text
     call pm_starts_with_word
     jc .port_8080
@@ -743,6 +747,10 @@ rtl8139_tcpconnect_cmd:
     jc .port_80
 
     jmp .usage
+
+.port_4433:
+    mov word [rtl8139_tcp_dst_port], 4433
+    jmp .port_ok
 
 .port_8080:
     mov word [rtl8139_tcp_dst_port], 8080
@@ -830,6 +838,25 @@ rtl8139_tcpget_cmd:
     add dword [rtl8139_tcp_seq], rtl8139_tcp_http_get_len
 
     mov esi, rtl8139_tcp_data_sent_msg
+    call pm_print_string
+    ret
+
+rtl8139_tlshello_cmd:
+    cmp byte [rtl8139_tcp_state], TCP_STATE_ESTABLISHED
+    je .established
+
+    mov esi, rtl8139_tcp_not_established_msg
+    call pm_print_string
+    ret
+
+.established:
+    call rtl8139_build_tcp_tls_clienthello
+    call rtl8139_tx_submit_current_quiet
+    inc dword [rtl8139_tcp_tx_count]
+    inc dword [rtl8139_tcp_data_tx_count]
+    add dword [rtl8139_tcp_seq], tls_clienthello_len
+
+    mov esi, rtl8139_tls_clienthello_sent_msg
     call pm_print_string
     ret
 
@@ -1439,6 +1466,98 @@ rtl8139_build_tcp_http_get:
     popad
     ret
 
+rtl8139_build_tcp_tls_clienthello:
+    pushad
+
+    mov edi, rtl8139_tx_buffer
+    mov ecx, 2048
+    xor eax, eax
+    rep stosb
+
+    mov edi, rtl8139_tx_buffer
+
+    ; Ethernet destination MAC
+    mov esi, rtl8139_gateway_mac
+    mov ecx, 6
+.copy_dst:
+    lodsb
+    stosb
+    loop .copy_dst
+
+    ; Ethernet source MAC
+    mov esi, rtl8139_mac
+    mov ecx, 6
+.copy_src:
+    lodsb
+    stosb
+    loop .copy_src
+
+    ; Ethertype IPv4
+    mov al, 08h
+    stosb
+    mov al, 00h
+    stosb
+
+    ; IPv4 header with TCP + payload length
+    mov ax, 20 + 20 + tls_clienthello_len
+    mov bl, 06h
+    mov esi, rtl8139_gateway_ip
+    call rtl8139_write_ipv4_header
+
+    ; TCP source port
+    mov ax, [rtl8139_tcp_src_port]
+    xchg al, ah
+    stosw
+
+    ; TCP destination port
+    mov ax, [rtl8139_tcp_dst_port]
+    xchg al, ah
+    stosw
+
+    ; TCP sequence number: initial seq + SYN byte
+    mov eax, [rtl8139_tcp_seq]
+    inc eax
+    call rtl8139_stos_be32
+
+    ; TCP ACK number: peer SYN seq + 1
+    mov eax, [rtl8139_tcp_last_seq]
+    inc eax
+    call rtl8139_stos_be32
+
+    ; TCP header length
+    mov al, 50h
+    stosb
+
+    ; Flags: PSH + ACK
+    mov al, 18h
+    stosb
+
+    ; Window
+    mov al, 40h
+    stosb
+    xor al, al
+    stosb
+
+    ; Checksum + urgent pointer initially zero
+    xor ax, ax
+    stosw
+    stosw
+
+    ; Payload
+    mov esi, tls_clienthello_payload
+    mov ecx, tls_clienthello_len
+.copy_payload:
+    lodsb
+    stosb
+    loop .copy_payload
+
+    call rtl8139_finish_tcp_checksum_tls_clienthello
+
+    mov dword [rtl8139_tx_len], 14 + 20 + 20 + tls_clienthello_len
+
+    popad
+    ret
+
 rtl8139_write_ipv4_tcp_frame_prefix:
     mov esi, rtl8139_gateway_mac
     mov ecx, 6
@@ -1573,6 +1692,60 @@ rtl8139_finish_tcp_checksum_payload:
 
     mov esi, rtl8139_tcp_checksum_buffer
     mov ecx, 12 + 20 + rtl8139_tcp_http_get_len
+    call rtl8139_checksum
+
+    mov [rtl8139_tx_buffer + 50], ah
+    mov [rtl8139_tx_buffer + 51], al
+
+    popad
+    ret
+
+; EDI=IPv4 header destination, AX=IPv4 total length, BL=protocol, ESI=dst IP.
+; Returns EDI advanced past the 20-byte header.
+rtl8139_finish_tcp_checksum_tls_clienthello:
+    pushad
+
+    mov edi, rtl8139_tcp_checksum_buffer
+    mov ecx, 64
+    xor eax, eax
+    rep stosb
+
+    mov edi, rtl8139_tcp_checksum_buffer
+
+    mov esi, rtl8139_local_ip
+    mov ecx, 4
+.copy_src_ip:
+    lodsb
+    stosb
+    loop .copy_src_ip
+
+    mov esi, rtl8139_gateway_ip
+    mov ecx, 4
+.copy_dst_ip:
+    lodsb
+    stosb
+    loop .copy_dst_ip
+
+    xor al, al
+    stosb
+    mov al, 06h
+    stosb
+
+    ; TCP length = 20-byte header + payload
+    xor al, al
+    stosb
+    mov al, 20 + tls_clienthello_len
+    stosb
+
+    mov esi, rtl8139_tx_buffer + 34
+    mov ecx, 20 + tls_clienthello_len
+.copy_tcp:
+    lodsb
+    stosb
+    loop .copy_tcp
+
+    mov esi, rtl8139_tcp_checksum_buffer
+    mov ecx, 12 + 20 + tls_clienthello_len
     call rtl8139_checksum
 
     mov [rtl8139_tx_buffer + 50], ah
@@ -2024,7 +2197,7 @@ rtl8139_udp_src_port_msg db 'src port: ',0
 rtl8139_udp_dst_port_msg db 'dst port: ',0
 rtl8139_udp_len_msg db 'length: ',0
 rtl8139_tcp_dst_port_text db '80',0
-rtl8139_tcpconnect_usage_msg db 'Usage: tcpconnect 10.0.2.2 80',13,0
+rtl8139_tcpconnect_usage_msg db 'Usage: tcpconnect 10.0.2.2 80|8080|4433',13,0
 rtl8139_tcp_syn_sent_msg db 'TCP SYN sent',13,0
 rtl8139_tcp_syn_wait_msg db 'TCP state: SYN_SENT',13,0
 rtl8139_tcp_established_msg db 'TCP state: ESTABLISHED',13,0
@@ -5106,3 +5279,8 @@ rtl8139_tcp_fin_rx_msg db 'fin_rx=',0
 rtl8139_tcp_fin_ack_tx_msg db 'fin_ack_tx=',0
 rtl8139_tcp_fin_ack_sent_msg db 'TCP FIN ACK sent',13,0
 rtl8139_tcp_fin_closed_msg db 'TCP state: CLOSED',13,0
+
+; GhostTLS TCP transport messages
+rtl8139_tls_clienthello_sent_msg db 'TLS ClientHello sent',13,0
+
+rtl8139_tcp_dst_port_4433_text db '4433',0

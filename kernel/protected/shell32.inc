@@ -221,6 +221,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_tcpget
 
+    mov edi, pm_cmd_tlshello
+    call pm_starts_with_word
+    jc pm_do_tlshello
+
     mov edi, pm_cmd_tcprecv
     call pm_starts_with_word
     jc pm_do_tcprecv
@@ -565,6 +569,10 @@ pm_do_tcpget:
     call rtl8139_tcpget_cmd
     jmp shell32_loop
 
+pm_do_tlshello:
+    call rtl8139_tlshello_cmd
+    jmp shell32_loop
+
 pm_do_tcprecv:
     call rtl8139_tcprecv_cmd
     jmp shell32_loop
@@ -813,7 +821,7 @@ pm_help_msg db \
 'CORE: help cls clear echo version',13,\
 'MEM: mem heapinfo memmap pages',13,\
 'CRYPTO: sha256test hmacsha256test hkdfsha256test rngtest rfc7748test',13,\
-'TLS: tlsscheduletest',13,\
+'TLS: tlsscheduletest tlshello',13,\
 'PCI: lspci netdev regs stack uptime panic',13,\
 'NET: netup netstat netdiag netbar netreset netclear',13,\
 'MAC: mac setmac randommac',13,\
@@ -891,6 +899,7 @@ pm_cmd_udpsend db 'udpsend',0
 pm_cmd_udpstat db 'udpstat',0
 pm_cmd_tcpconnect db 'tcpconnect',0
 pm_cmd_tcpget db 'tcpget',0
+pm_cmd_tlshello db 'tlshello',0
 pm_cmd_tcprecv db 'tcprecv',0
 pm_cmd_tcprecvall db 'tcprecvall',0
 pm_cmd_tcpstat db 'tcpstat',0

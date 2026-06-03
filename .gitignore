@@ -25,3 +25,7 @@ ghost.ps1
 # Windows
 Thumbs.db
 Desktop.ini
+# Local screenshots / temporary images
+*.png
+*.jpg
+*.jpeg

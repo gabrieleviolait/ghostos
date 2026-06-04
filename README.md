@@ -26,7 +26,7 @@ The project is developed as a learning and research platform to explore how mode
 | Curve25519 Field Arithmetic | ✅ Working      |
 | X25519                      | ✅ Working      |
 | TLS Key Schedule Foundations | ✅ Experimental |
-| TLS ClientHello Transport   | ✅ Experimental |
+| TLS Record Parsing          | ✅ Experimental |
 | Tor Link Protocol           | ⬜ Planned      |
 
 ---
@@ -143,7 +143,7 @@ The networking stack is functional for low-level communication testing and now i
 
 GhostNet currently supports ARP gateway discovery, ICMP ping testing, TCP connection establishment, HTTP `GET / HTTP/1.0` payload transmission, TCP payload receive/dump, multi-segment receive loops, ACKs for received payload data, and FIN close handling. This has been validated against a local Python HTTP server on `10.0.2.2:8080`.
 
-The cryptographic subsystem now includes RFC7748-validated X25519, RFC5869-validated HKDF-SHA256, an experimental GhostTLS key schedule foundation, and a minimal TLS plaintext ClientHello record that can be sent over the GhostNet TCP flow. The project is evolving toward OpenSSL-compatible TLS handshakes, TLS record parsing, and privacy-oriented protocols.
+The cryptographic subsystem now includes RFC7748-validated X25519, RFC5869-validated HKDF-SHA256, an experimental GhostTLS key schedule foundation, a TLS plaintext ClientHello transport over GhostNet TCP, and a minimal TLS record parser capable of recognizing ServerHello, ChangeCipherSpec, and encrypted TLS 1.3 records. The project is evolving toward ServerHello extension parsing, real X25519 shared secret derivation, encrypted handshake processing, and privacy-oriented protocols.
 
 ---
 
@@ -203,36 +203,42 @@ GhostOS now matches the RFC7748 X25519 public key/shared secret reference vector
 * ✅ Application traffic secret placeholders
 * ✅ Deterministic key schedule test
 
-### GhostTLS v0.2 — Record Layer / ClientHello
+### GhostTLS v0.2 — ClientHello Transport
 
 * ✅ Minimal TLS plaintext record
 * ✅ Minimal ClientHello skeleton
 * ✅ `tlshello` shell command
 * ✅ Send ClientHello over the GhostNet TCP flow
 * ✅ Validate raw ClientHello bytes with a local TCP listener on `10.0.2.2:4433`
-* Next: make ClientHello compatible with `openssl s_server`
-* Next: receive and dump ServerHello / Alert records
-* Next: integrate real X25519 key share
-* Future: encrypted records
+* ✅ Improve ClientHello compatibility with a local Python TLS server
+* ✅ Add TLS 1.3 extensions: supported_versions, supported_groups, signature_algorithms, key_share
+* Next: replace diagnostic key_share with real GhostCrypto X25519 output
 
-### GhostTLS v0.2b — ClientHello Compatibility
+### GhostTLS v0.3 — TLS Record Receive Parser
 
-* Add realistic TLS 1.3 extensions
-* Add supported_versions
-* Add supported_groups
-* Add signature_algorithms
-* Add key_share extension
-* Replace deterministic random with GhostCrypto RNG output
-* Test against `openssl s_server`
+* ✅ `tlsrecv` shell command
+* ✅ Receive TLS records over GhostNet TCP
+* ✅ Parse TLS record headers
+* ✅ Parse multiple TLS records in the same TCP payload
+* ✅ Print readable TLS record names
+* ✅ Recognize Handshake records
+* ✅ Recognize ServerHello
+* ✅ Recognize ChangeCipherSpec
+* ✅ Recognize encrypted TLS 1.3 ApplicationData records
+* ✅ Extract basic ServerHello fields:
+  * legacy version
+  * selected cipher suite
+  * extensions length
+* Validated against a local Python TLS server on `10.0.2.2:4433`
 
-### GhostTLS v0.3 — ServerHello / Alert Receive Parser
+### GhostTLS v0.3d — ServerHello Extensions Parser
 
-* Receive TLS records through `tcprecvall`
-* Parse TLS record header
-* Detect Alert records
-* Detect ServerHello records
-* Dump handshake type and record length
-* Prepare transcript hash input
+* Parse ServerHello extensions
+* Detect supported_versions
+* Detect key_share
+* Extract selected group
+* Extract server X25519 public key length
+* Store server X25519 public key for shared secret derivation
 
 ### GhostTLS v0.4 — X25519 Key Share Integration
 

@@ -5012,10 +5012,10 @@ rtl8139_rx_record_tcp_current:
     ; Store real TCP payload length for ACK calculation.
     mov [rtl8139_tcp_last_payload_wire_len], ax
 
-    ; Limit stored payload to 639 bytes and NUL terminate.
-    cmp eax, 639
+    ; Limit stored payload to 383 bytes and NUL terminate.
+    cmp eax, 383
     jbe .payload_len_ok
-    mov eax, 639
+    mov eax, 383
 
 .payload_len_ok:
     mov [rtl8139_tcp_last_payload_len], ax
@@ -5205,6 +5205,75 @@ rtl8139_print_tls_handshake_name:
     popad
     ret
 
+rtl8139_print_tls_serverhello_fields:
+    pushad
+
+    ; EDI = TLS record offset in rtl8139_tcp_payload_buffer.
+    ; TLS record header = 5 bytes.
+    ; Handshake header = 4 bytes.
+    ; ServerHello body starts at EDI + 9.
+    movzx ecx, word [rtl8139_tcp_last_payload_len]
+
+    ; Need at least up to session_id_len at body + 34.
+    mov eax, edi
+    add eax, 44
+    cmp eax, ecx
+    ja .short
+
+    mov esi, rtl8139_tls_sh_legacy_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_tcp_payload_buffer + edi + 9]
+    shl eax, 8
+    movzx edx, byte [rtl8139_tcp_payload_buffer + edi + 10]
+    or eax, edx
+    call pm_print_hex32
+    call pm_newline
+
+    ; session_id_len at body + 34 = EDI + 43
+    movzx ebx, byte [rtl8139_tcp_payload_buffer + edi + 43]
+
+    ; cipher_suite offset = body + 35 + session_id_len = EDI + 44 + sid_len
+    mov edx, edi
+    add edx, 44
+    add edx, ebx
+
+    ; Need cipher_suite 2 bytes + compression 1 + extensions_len 2
+    mov eax, edx
+    add eax, 5
+    cmp eax, ecx
+    ja .short
+
+    mov esi, rtl8139_tls_sh_cipher_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_tcp_payload_buffer + edx]
+    shl eax, 8
+    movzx ebx, byte [rtl8139_tcp_payload_buffer + edx + 1]
+    or eax, ebx
+    call pm_print_hex32
+    call pm_newline
+
+    ; extensions length offset = cipher_offset + 3
+    add edx, 3
+
+    mov esi, rtl8139_tls_sh_extlen_msg
+    call pm_print_string
+    movzx eax, byte [rtl8139_tcp_payload_buffer + edx]
+    shl eax, 8
+    movzx ebx, byte [rtl8139_tcp_payload_buffer + edx + 1]
+    or eax, ebx
+    call pm_print_uint32
+    call pm_newline
+
+    jmp .done
+
+.short:
+    mov esi, rtl8139_tls_sh_short_msg
+    call pm_print_string
+
+.done:
+    popad
+    ret
+
 rtl8139_print_tls_payload_info:
     pushad
 
@@ -5278,6 +5347,12 @@ rtl8139_print_tls_payload_info:
     mov al, dl
     call rtl8139_print_tls_handshake_name
 
+    mov al, dl
+    cmp al, 02h
+    jne .no_serverhello_fields
+    call rtl8139_print_tls_serverhello_fields
+
+.no_serverhello_fields:
     pop eax
 
 .advance:
@@ -5286,7 +5361,7 @@ rtl8139_print_tls_payload_info:
     add edi, eax
 
     ; avoid runaway if malformed zero/huge length wraps weirdly
-    cmp edi, 639
+    cmp edi, 383
     jae .done
 
     jmp .next_record
@@ -5547,7 +5622,7 @@ rtl8139_tcp_payload_len_msg db 'payload_len=',0
 rtl8139_tcprecv_msg db 'TCP RX data',13,0
 rtl8139_tcprecv_len_msg db 'len=',0
 rtl8139_tcprecv_none_msg db 'TCP RX data: none',13,0
-rtl8139_tcp_payload_buffer times 640 db 0
+rtl8139_tcp_payload_buffer times 384 db 0
 
 ; TCP data ACK messages
 rtl8139_tcp_data_ack_tx_msg db 'data_ack_tx=',0
@@ -5596,3 +5671,9 @@ rtl8139_tls_hs_encrypted_extensions_msg db 'EncryptedExtensions',13,0
 rtl8139_tls_hs_certificate_msg db 'Certificate',13,0
 rtl8139_tls_hs_certificate_verify_msg db 'CertificateVerify',13,0
 rtl8139_tls_hs_finished_msg db 'Finished',13,0
+
+; GhostTLS ServerHello field extraction
+rtl8139_tls_sh_legacy_msg db 'sh_legacy=',0
+rtl8139_tls_sh_cipher_msg db 'sh_cipher=',0
+rtl8139_tls_sh_extlen_msg db 'sh_ext_len=',0
+rtl8139_tls_sh_short_msg db 'ServerHello: short',13,0

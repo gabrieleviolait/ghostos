@@ -5012,10 +5012,10 @@ rtl8139_rx_record_tcp_current:
     ; Store real TCP payload length for ACK calculation.
     mov [rtl8139_tcp_last_payload_wire_len], ax
 
-    ; Limit stored payload to 767 bytes and NUL terminate.
-    cmp eax, 767
+    ; Limit stored payload to 639 bytes and NUL terminate.
+    cmp eax, 639
     jbe .payload_len_ok
-    mov eax, 767
+    mov eax, 639
 
 .payload_len_ok:
     mov [rtl8139_tcp_last_payload_len], ax
@@ -5107,6 +5107,104 @@ rtl8139_rx_discard_to_cbr:
     popad
     ret
 
+rtl8139_print_tls_type_name:
+    pushad
+
+    mov esi, rtl8139_tls_type_name_msg
+    call pm_print_string
+
+    cmp al, 14h
+    je .ccs
+    cmp al, 15h
+    je .alert
+    cmp al, 16h
+    je .handshake
+    cmp al, 17h
+    je .appdata
+
+    mov esi, rtl8139_tls_name_unknown_msg
+    call pm_print_string
+    jmp .done
+
+.ccs:
+    mov esi, rtl8139_tls_name_ccs_msg
+    call pm_print_string
+    jmp .done
+
+.alert:
+    mov esi, rtl8139_tls_name_alert_msg
+    call pm_print_string
+    jmp .done
+
+.handshake:
+    mov esi, rtl8139_tls_name_handshake_msg
+    call pm_print_string
+    jmp .done
+
+.appdata:
+    mov esi, rtl8139_tls_name_appdata_msg
+    call pm_print_string
+
+.done:
+    popad
+    ret
+
+rtl8139_print_tls_handshake_name:
+    pushad
+
+    mov esi, rtl8139_tls_handshake_name_msg
+    call pm_print_string
+
+    cmp al, 01h
+    je .client_hello
+    cmp al, 02h
+    je .server_hello
+    cmp al, 08h
+    je .encrypted_extensions
+    cmp al, 0Bh
+    je .certificate
+    cmp al, 0Fh
+    je .certificate_verify
+    cmp al, 14h
+    je .finished
+
+    mov esi, rtl8139_tls_name_unknown_msg
+    call pm_print_string
+    jmp .done
+
+.client_hello:
+    mov esi, rtl8139_tls_hs_clienthello_msg
+    call pm_print_string
+    jmp .done
+
+.server_hello:
+    mov esi, rtl8139_tls_hs_serverhello_msg
+    call pm_print_string
+    jmp .done
+
+.encrypted_extensions:
+    mov esi, rtl8139_tls_hs_encrypted_extensions_msg
+    call pm_print_string
+    jmp .done
+
+.certificate:
+    mov esi, rtl8139_tls_hs_certificate_msg
+    call pm_print_string
+    jmp .done
+
+.certificate_verify:
+    mov esi, rtl8139_tls_hs_certificate_verify_msg
+    call pm_print_string
+    jmp .done
+
+.finished:
+    mov esi, rtl8139_tls_hs_finished_msg
+    call pm_print_string
+
+.done:
+    popad
+    ret
+
 rtl8139_print_tls_payload_info:
     pushad
 
@@ -5135,6 +5233,9 @@ rtl8139_print_tls_payload_info:
     movzx eax, byte [rtl8139_tcp_payload_buffer + edi]
     call pm_print_hex32
     call pm_newline
+
+    mov al, [rtl8139_tcp_payload_buffer + edi]
+    call rtl8139_print_tls_type_name
 
     mov esi, rtl8139_tls_version_msg
     call pm_print_string
@@ -5173,6 +5274,10 @@ rtl8139_print_tls_payload_info:
     mov eax, edx
     call pm_print_hex32
     call pm_newline
+
+    mov al, dl
+    call rtl8139_print_tls_handshake_name
+
     pop eax
 
 .advance:
@@ -5181,7 +5286,7 @@ rtl8139_print_tls_payload_info:
     add edi, eax
 
     ; avoid runaway if malformed zero/huge length wraps weirdly
-    cmp edi, 767
+    cmp edi, 639
     jae .done
 
     jmp .next_record
@@ -5442,7 +5547,7 @@ rtl8139_tcp_payload_len_msg db 'payload_len=',0
 rtl8139_tcprecv_msg db 'TCP RX data',13,0
 rtl8139_tcprecv_len_msg db 'len=',0
 rtl8139_tcprecv_none_msg db 'TCP RX data: none',13,0
-rtl8139_tcp_payload_buffer times 768 db 0
+rtl8139_tcp_payload_buffer times 640 db 0
 
 ; TCP data ACK messages
 rtl8139_tcp_data_ack_tx_msg db 'data_ack_tx=',0
@@ -5476,3 +5581,18 @@ rtl8139_tlsrecv_done_msg db 'TLS RX done',13,0
 rtl8139_tcp_payload_wire_len_msg db 'payload_wire_len=',0
 
 rtl8139_tls_offset_msg db 'offset=',0
+
+; GhostTLS readable parser names
+rtl8139_tls_type_name_msg db 'type_name=',0
+rtl8139_tls_handshake_name_msg db 'handshake_name=',0
+rtl8139_tls_name_ccs_msg db 'ChangeCipherSpec',13,0
+rtl8139_tls_name_alert_msg db 'Alert',13,0
+rtl8139_tls_name_handshake_msg db 'Handshake',13,0
+rtl8139_tls_name_appdata_msg db 'ApplicationDataEncrypted',13,0
+rtl8139_tls_name_unknown_msg db 'Unknown',13,0
+rtl8139_tls_hs_clienthello_msg db 'ClientHello',13,0
+rtl8139_tls_hs_serverhello_msg db 'ServerHello',13,0
+rtl8139_tls_hs_encrypted_extensions_msg db 'EncryptedExtensions',13,0
+rtl8139_tls_hs_certificate_msg db 'Certificate',13,0
+rtl8139_tls_hs_certificate_verify_msg db 'CertificateVerify',13,0
+rtl8139_tls_hs_finished_msg db 'Finished',13,0

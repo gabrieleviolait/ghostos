@@ -856,6 +856,7 @@ rtl8139_tlshello_cmd:
     ret
 
 .established:
+    call tls_clienthello_prepare_keyshare
     call rtl8139_build_tcp_tls_clienthello
     call rtl8139_tx_submit_current_quiet
     inc dword [rtl8139_tcp_tx_count]

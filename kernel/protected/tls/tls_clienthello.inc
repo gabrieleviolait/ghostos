@@ -76,9 +76,48 @@ tls_clienthello_payload:
     db 000h, 024h
     db 000h, 01Dh
     db 000h, 020h
+
+tls_clienthello_keyshare_public:
     db 085h, 020h, 0F0h, 009h, 089h, 030h, 0A7h, 054h
     db 074h, 08Bh, 07Dh, 0DCh, 0B4h, 03Eh, 0F7h, 05Ah
     db 00Dh, 0BFh, 03Ah, 00Dh, 026h, 038h, 01Ah, 0F4h
     db 0EBh, 0A4h, 0A9h, 08Eh, 0AAh, 09Bh, 04Eh, 06Ah
 
 tls_clienthello_len equ $ - tls_clienthello_payload
+
+; GhostTLS v0.4a deterministic X25519 client key_share.
+; This is a real X25519 public key generated at runtime from this
+; deterministic private key. RNG-based ephemeral generation comes next.
+tls_client_private_key:
+    db 077h, 007h, 06Dh, 00Ah, 073h, 018h, 0A5h, 07Dh
+    db 03Ch, 016h, 0C1h, 072h, 051h, 0B2h, 066h, 045h
+    db 0DFh, 04Ch, 02Fh, 087h, 0EBh, 0C0h, 099h, 02Ah
+    db 0B1h, 077h, 0FBh, 0A5h, 01Dh, 0B9h, 02Ch, 02Ah
+
+tls_client_keyshare_generated_msg db 'client key_share generated',13,0
+
+tls_clienthello_prepare_keyshare:
+    pushad
+
+    ; curve25519_private_key = deterministic client private key
+    mov esi, tls_client_private_key
+    mov edi, curve25519_private_key
+    call curve25519_fe_copy
+
+    ; Clamp private scalar for X25519
+    call curve25519_clamp_private
+
+    ; public = X25519(private, basepoint)
+    call x25519_ladder_init
+    call x25519_generate_public_skeleton
+
+    ; Copy generated public key into ClientHello key_share bytes
+    mov esi, curve25519_public_key
+    mov edi, tls_clienthello_keyshare_public
+    call curve25519_fe_copy
+
+    mov esi, tls_client_keyshare_generated_msg
+    call pm_print_string
+
+    popad
+    ret

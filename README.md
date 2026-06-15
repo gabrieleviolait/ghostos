@@ -143,7 +143,7 @@ The networking stack is functional for low-level communication testing and now i
 
 GhostNet currently supports ARP gateway discovery, ICMP ping testing, TCP connection establishment, HTTP `GET / HTTP/1.0` payload transmission, TCP payload receive/dump, multi-segment receive loops, ACKs for received payload data, and FIN close handling. This has been validated against a local Python HTTP server on `10.0.2.2:8080`.
 
-The cryptographic subsystem now includes RFC7748-validated X25519, RFC5869-validated HKDF-SHA256, an experimental GhostTLS key schedule foundation, a TLS plaintext ClientHello transport over GhostNet TCP, and a minimal TLS record parser capable of recognizing ServerHello, ChangeCipherSpec, and encrypted TLS 1.3 records. The project is evolving toward ServerHello extension parsing, real X25519 shared secret derivation, encrypted handshake processing, and privacy-oriented protocols.
+The cryptographic subsystem now includes RFC7748-validated X25519, RFC5869-validated HKDF-SHA256, real GhostTLS X25519 key exchange, transcript hash construction, TLS 1.3 handshake secret derivation, traffic secret derivation, selected cipher reporting, and a TLS record parser capable of extracting ServerHello extensions. The current TLS path has negotiated ChaCha20-Poly1305 with `selected_cipher=0x1303`; the next block is handshake key/IV derivation and ChaCha20-Poly1305 record protection groundwork.
 
 ---
 
@@ -167,94 +167,195 @@ GhostOS now matches the RFC7748 X25519 public key/shared secret reference vector
 
 ## Roadmap
 
-### Curve25519 / X25519
+### Current GhostTLS Status
 
-* ✅ Real inversion chain
-* ✅ RFC7748 validation
-* ✅ Public key verification
-* ✅ Shared secret verification
-* Constant-time refinements
+#### GhostNet / TCP
 
-### HKDF-SHA256
+* ✅ RTL8139 init
+* ✅ ARP gateway
+* ✅ ICMP ping
+* ✅ TCP SYN / SYN-ACK / ACK
+* ✅ TCP ESTABLISHED
+* ✅ TCP payload send
+* ✅ TCP payload receive
+* ✅ ACK for received payload data
+* ✅ Automated TLS test with `tlstest`
+* ✅ Interactive `-- press key --` checkpoints
 
-* ✅ HKDF-Extract
-* ✅ HKDF-Expand
-* ✅ RFC5869 validation
-* ✅ PRK verification
-* ✅ OKM verification
+#### GhostCrypto
 
-### GhostNet TCP v0.2 — Minimal TCP Client Flow
+* ✅ SHA-256
+* ✅ HMAC-SHA256
+* ✅ HKDF-SHA256 RFC5869
+* ✅ Curve25519 / X25519 RFC7748
+* ✅ X25519 shared secret test PASS
 
-* ✅ TCP SYN / SYN-ACK / ACK handshake
-* ✅ HTTP `GET / HTTP/1.0` payload send
-* ✅ TCP payload receive and ASCII dump
-* ✅ Multi-segment receive loop
-* ✅ ACK received TCP payload data
-* ✅ FIN receive and close handling
-* Next: TCP robustness refinements and TLS ClientHello transport
+#### GhostTLS v0.2 / v0.3
 
-### GhostTLS v0.1 — Key Schedule Foundations
+* ✅ TLS 1.3 ClientHello
+* ✅ X25519 `key_share` in ClientHello
+* ✅ ServerHello received
+* ✅ TLS record parser
+* ✅ Multi-record parser
+* ✅ ServerHello field extraction
+* ✅ `selected_version = 0x0304`
+* ✅ Server `key_share` parsed
+* ✅ `server_pubkey saved`
 
-* ✅ TLS-style key schedule skeleton
-* ✅ Early secret derivation
-* ✅ Handshake secret derivation
-* ✅ Client handshake traffic secret derivation
-* ✅ Server handshake traffic secret derivation
-* ✅ Application traffic secret placeholders
-* ✅ Deterministic key schedule test
+#### GhostTLS v0.4
 
-### GhostTLS v0.2 — ClientHello Transport
+* ✅ Runtime-generated real X25519 client `key_share`
+* ✅ Server X25519 public key saved
+* ✅ Real X25519 shared secret derived
 
-* ✅ Minimal TLS plaintext record
-* ✅ Minimal ClientHello skeleton
-* ✅ `tlshello` shell command
-* ✅ Send ClientHello over the GhostNet TCP flow
-* ✅ Validate raw ClientHello bytes with a local TCP listener on `10.0.2.2:4433`
-* ✅ Improve ClientHello compatibility with a local Python TLS server
-* ✅ Add TLS 1.3 extensions: supported_versions, supported_groups, signature_algorithms, key_share
-* Next: replace diagnostic key_share with real GhostCrypto X25519 output
+#### GhostTLS v0.5
 
-### GhostTLS v0.3 — TLS Record Receive Parser
+* ✅ Transcript hash built
+* ✅ Handshake secret derived
+* ✅ Client handshake traffic secret derived
+* ✅ Server handshake traffic secret derived
+* ✅ `tlssecrets` command
+* ✅ Selected cipher summary
+* ✅ ChaCha20-Poly1305 negotiated: `selected_cipher=0x1303`
 
-* ✅ `tlsrecv` shell command
-* ✅ Receive TLS records over GhostNet TCP
-* ✅ Parse TLS record headers
-* ✅ Parse multiple TLS records in the same TCP payload
-* ✅ Print readable TLS record names
-* ✅ Recognize Handshake records
-* ✅ Recognize ServerHello
-* ✅ Recognize ChangeCipherSpec
-* ✅ Recognize encrypted TLS 1.3 ApplicationData records
-* ✅ Extract basic ServerHello fields:
-  * legacy version
-  * selected cipher suite
-  * extensions length
-* Validated against a local Python TLS server on `10.0.2.2:4433`
+### Next Block: GhostTLS v0.6
 
-### GhostTLS v0.3d — ServerHello Extensions Parser
+GhostTLS now follows the ChaCha20-Poly1305 path rather than AES-GCM.
 
-* Parse ServerHello extensions
-* Detect supported_versions
-* Detect key_share
-* Extract selected group
-* Extract server X25519 public key length
-* Store server X25519 public key for shared secret derivation
+#### v0.6a — Derive Handshake Key/IV
 
-### GhostTLS v0.4 — X25519 Key Share Integration
+Derive:
 
-* Generate ephemeral X25519 private key
-* Derive public key with existing X25519 implementation
-* Insert public key into ClientHello key_share
-* Prepare shared secret derivation after ServerHello
+```text
+server_hs_key = HKDF-Expand-Label(server_hs_traffic_secret, "key", "", 32)
+server_hs_iv  = HKDF-Expand-Label(server_hs_traffic_secret, "iv", "", 12)
+client_hs_key = HKDF-Expand-Label(client_hs_traffic_secret, "key", "", 32)
+client_hs_iv  = HKDF-Expand-Label(client_hs_traffic_secret, "iv", "", 12)
+```
 
-### GhostTor
+Output target:
 
-* Tor Link Protocol
-* VERSIONS cells
-* NETINFO cells
+```text
+server_hs_key derived
+server_hs_iv derived
+client_hs_key derived
+client_hs_iv derived
+```
+
+#### v0.6b — ChaCha20 Block Function
+
+Implement and test:
+
+* Quarter round
+* 20 rounds
+* State serialization
+* Counter
+* 96-bit nonce
+* RFC/standard test vector before TLS integration
+
+Output target:
+
+```text
+chacha20 block PASS
+```
+
+#### v0.6c — Poly1305
+
+Implement and test:
+
+* One-time key from ChaCha20 block counter 0
+* Poly1305 MAC
+* Tag verification
+
+Output target:
+
+```text
+poly1305 PASS
+```
+
+#### v0.6d — ChaCha20-Poly1305 AEAD Decrypt
+
+Implement:
+
+* AAD = TLS record header
+* Ciphertext = encrypted record payload without tag
+* Tag = final 16 bytes
+* Nonce = static IV XOR sequence number
+
+Output target:
+
+```text
+handshake record decrypted
+tag verified
+```
+
+#### v0.6e — Read EncryptedExtensions
+
+After AEAD decrypt works, parse the first encrypted TLS 1.3 handshake messages:
+
+* EncryptedExtensions
+* Certificate
+* CertificateVerify
+* Finished
+
+Minimum output target:
+
+```text
+decrypted_type=Handshake
+handshake_name=EncryptedExtensions
+```
+
+### After v0.6
+
+#### GhostTLS v0.7 — Finished Verification
+
+* Progressive transcript hash update
+* Server Finished `verify_data`
+* Client Finished construction
+* Encrypted client Finished record send
+
+#### GhostTLS v0.8 — Application Traffic
+
+* Derive client/server application traffic secrets
+* Derive application key/IV
+* Send encrypted HTTP GET
+* Receive encrypted HTTPS response
+* Decrypt HTTP response
+
+Dream output:
+
+```text
+tlsget 10.0.2.2 4433 /
+HTTP/1.1 200 OK
+...
+```
+
+### After TLS: GhostTor
+
+#### GhostTor v0.1
+
+* TLS toward a Tor relay
+* VERSIONS cell
+* NETINFO cell
+
+#### GhostTor v0.2
+
 * CREATE2 / CREATED2
-* Circuit establishment
-* Relay support
+* ntor handshake
+* Circuit keys
+
+#### GhostTor v0.3
+
+* RELAY_BEGIN
+* RELAY_DATA
+* RELAY_END
+* HTTP request through an exit node
+
+#### GhostTor v0.4+
+
+* Multi-hop circuits
+* Directory consensus / relay selection
+* Onion services later
 
 ---
 
@@ -302,6 +403,8 @@ sha256test
 hmacsha256test
 hkdfsha256test
 tlsscheduletest
+tlstest
+tlssecrets
 rngtest
 rfc7748test
 ```

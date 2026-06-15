@@ -197,12 +197,192 @@ qemu-system-i386 -drive file=build/ghostos.img,format=raw,if=floppy -vga std -ne
 - Non fatto: parsing Ethernet/IP completo, UDP, TCP, DNS, HTTP, browser
   networking, SOCKS5 o Tor reale.
 
-## Tor-only networking future
+## GhostTLS status attuale - dopo selected_cipher=0x1303
 
-- Design-only: Ghost OS non fara' clearnet diretto a livello applicativo.
-- Ogni futuro client userland dovra' passare da un proxy/Tor gateway
-  controllato, senza socket applicativi diretti verso Internet.
-- Prima di Tor servono fondamenta misurabili e CLI-only: Ethernet RX/TX,
-  ARP, IPv4, ICMP, UDP e TCP minimi, con diagnostica e contatori affidabili.
-- Fuori scope per v1.5-alpha: client Tor, SOCKS5, HTTP, TLS, browser
-  networking e qualsiasi dipendenza esterna.
+GhostNet / TCP:
+
+- Fatto: RTL8139 init.
+- Fatto: ARP gateway.
+- Fatto: ICMP ping.
+- Fatto: TCP SYN / SYN-ACK / ACK.
+- Fatto: TCP ESTABLISHED.
+- Fatto: TCP payload send.
+- Fatto: TCP payload receive.
+- Fatto: ACK dei payload ricevuti.
+- Fatto: TLS test automatizzato con `tlstest`.
+- Fatto: pause interattive `-- press key --`.
+
+GhostCrypto:
+
+- Fatto: SHA-256.
+- Fatto: HMAC-SHA256.
+- Fatto: HKDF-SHA256 RFC5869.
+- Fatto: Curve25519 / X25519 RFC7748.
+- Fatto: X25519 shared secret test PASS.
+
+GhostTLS v0.2 / v0.3:
+
+- Fatto: ClientHello TLS 1.3.
+- Fatto: `key_share` X25519 nel ClientHello.
+- Fatto: ServerHello ricevuto.
+- Fatto: TLS record parser.
+- Fatto: multi-record parser.
+- Fatto: ServerHello field extraction.
+- Fatto: `selected_version = 0x0304`.
+- Fatto: key_share server parsed.
+- Fatto: `server_pubkey saved`.
+
+GhostTLS v0.4:
+
+- Fatto: client `key_share` reale X25519 generata runtime.
+- Fatto: server public key X25519 salvata.
+- Fatto: shared secret X25519 reale derivato.
+
+GhostTLS v0.5:
+
+- Fatto: transcript hash built.
+- Fatto: handshake secret derived.
+- Fatto: client handshake traffic secret derived.
+- Fatto: server handshake traffic secret derived.
+- Fatto: comando `tlssecrets`.
+- Fatto: selected cipher summary.
+- Fatto: ChaCha20-Poly1305 negoziato con `selected_cipher=0x1303`.
+
+## GhostTLS v0.6 - ChaCha20-Poly1305 groundwork
+
+La strada scelta e' ChaCha20-Poly1305, non AES-GCM.
+
+### v0.6a - derive handshake key/iv
+
+Da fare subito:
+
+```text
+server_hs_key = HKDF-Expand-Label(server_hs_traffic_secret, "key", "", 32)
+server_hs_iv  = HKDF-Expand-Label(server_hs_traffic_secret, "iv", "", 12)
+client_hs_key = HKDF-Expand-Label(client_hs_traffic_secret, "key", "", 32)
+client_hs_iv  = HKDF-Expand-Label(client_hs_traffic_secret, "iv", "", 12)
+```
+
+Output target:
+
+```text
+server_hs_key derived
+server_hs_iv derived
+client_hs_key derived
+client_hs_iv derived
+```
+
+### v0.6b - ChaCha20 block function
+
+Da implementare prima con test vector RFC/standard, non subito TLS:
+
+- quarter round.
+- 20 rounds.
+- serialize state.
+- counter.
+- nonce 96-bit.
+
+Output target:
+
+```text
+chacha20 block PASS
+```
+
+### v0.6c - Poly1305
+
+Da implementare:
+
+- one-time key da ChaCha20 block counter 0.
+- Poly1305 MAC.
+- verify tag.
+
+Output target:
+
+```text
+poly1305 PASS
+```
+
+### v0.6d - ChaCha20-Poly1305 AEAD decrypt
+
+Da implementare:
+
+- AAD = TLS record header.
+- ciphertext = encrypted record payload senza tag.
+- tag = ultimi 16 byte.
+- nonce = static_iv XOR sequence_number.
+
+Output target:
+
+```text
+handshake record decrypted
+tag verified
+```
+
+### v0.6e - leggere EncryptedExtensions
+
+Quando il decrypt funziona, il primo record cifrato dovrebbe contenere
+messaggi handshake TLS 1.3:
+
+- EncryptedExtensions.
+- Certificate.
+- CertificateVerify.
+- Finished.
+
+Output target minimo:
+
+```text
+decrypted_type=Handshake
+handshake_name=EncryptedExtensions
+```
+
+## Dopo v0.6
+
+GhostTLS v0.7 - Finished verification:
+
+- transcript hash aggiornato.
+- verify_data server Finished.
+- client Finished.
+- invio record cifrato client Finished.
+
+GhostTLS v0.8 - Application traffic secrets:
+
+- derive client/server application traffic secrets.
+- derive application key/iv.
+- inviare HTTP GET cifrato.
+- ricevere risposta HTTPS cifrata.
+- decrypt risposta HTTP.
+
+Output sogno:
+
+```text
+tlsget 10.0.2.2 4433 /
+HTTP/1.1 200 OK
+...
+```
+
+## Dopo TLS: GhostTor
+
+GhostTor v0.1:
+
+- TLS verso relay Tor.
+- VERSIONS cell.
+- NETINFO cell.
+
+GhostTor v0.2:
+
+- CREATE2 / CREATED2.
+- ntor handshake.
+- circuit keys.
+
+GhostTor v0.3:
+
+- RELAY_BEGIN.
+- RELAY_DATA.
+- RELAY_END.
+- richiesta HTTP via exit node.
+
+GhostTor v0.4+:
+
+- circuiti multi-hop.
+- directory consensus / relay selection.
+- onion services molto piu' avanti.

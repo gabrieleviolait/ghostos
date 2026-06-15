@@ -906,6 +906,7 @@ rtl8139_tlstest_cmd:
 .skip_handshake_secrets:
     call rtl8139_tlstest_pause
 
+    call rtl8139_print_tls_selected_cipher_summary
     call rtl8139_tcpstat
 
 .done:
@@ -944,6 +945,7 @@ rtl8139_tlstest_reset_state:
 
     mov word [rtl8139_tls_selected_version], 0
     mov word [rtl8139_tls_selected_group], 0
+    mov word [rtl8139_tls_selected_cipher], 0
     mov dword [rtl8139_tls_server_key_share_len], 0
     mov byte [tls_shared_secret_ready], 0
 
@@ -5348,6 +5350,7 @@ rtl8139_print_tls_serverhello_fields:
     shl eax, 8
     movzx ebx, byte [rtl8139_tcp_payload_buffer + edx + 1]
     or eax, ebx
+    mov [rtl8139_tls_selected_cipher], ax
     call pm_print_hex32
     call pm_newline
 
@@ -5538,6 +5541,20 @@ rtl8139_parse_tls_serverhello_extensions:
 
 .done:
     popad
+    ret
+
+rtl8139_print_tls_selected_cipher_summary:
+    push eax
+    push esi
+
+    mov esi, rtl8139_tls_selected_cipher_msg
+    call pm_print_string
+    mov ax, [rtl8139_tls_selected_cipher]
+    call rtl8139_print_hex16
+    call pm_newline
+
+    pop esi
+    pop eax
     ret
 
 rtl8139_print_hex16:
@@ -5959,6 +5976,7 @@ rtl8139_tls_hs_finished_msg db 'Finished',13,0
 ; GhostTLS ServerHello field extraction
 rtl8139_tls_sh_legacy_msg db 'sh_legacy=',0
 rtl8139_tls_sh_cipher_msg db 'sh_cipher=',0
+rtl8139_tls_selected_cipher_msg db 'selected_cipher=',0
 rtl8139_tls_sh_extlen_msg db 'sh_ext_len=',0
 rtl8139_tls_sh_short_msg db 'ServerHello: short',13,0
 rtl8139_tls_sh_extensions_msg db 'ServerHello extensions',13,0
@@ -5980,5 +5998,6 @@ rtl8139_tls_sh_cur_ext_len dd 0
 rtl8139_tls_sh_ext_type dw 0
 rtl8139_tls_selected_version dw 0
 rtl8139_tls_selected_group dw 0
+rtl8139_tls_selected_cipher dw 0
 rtl8139_tls_server_key_share_len dd 0
 rtl8139_tls_server_pubkey times 32 db 0

@@ -95,6 +95,10 @@ tls_client_private_key:
     db 0B1h, 077h, 0FBh, 0A5h, 01Dh, 0B9h, 02Ch, 02Ah
 
 tls_client_keyshare_generated_msg db 'client key_share generated',13,0
+tls_shared_secret_derived_msg db 'shared_secret derived',13,0
+
+tls_shared_secret_ready db 0
+tls_shared_secret times 32 db 0
 
 tls_clienthello_prepare_keyshare:
     pushad
@@ -117,6 +121,37 @@ tls_clienthello_prepare_keyshare:
     call curve25519_fe_copy
 
     mov esi, tls_client_keyshare_generated_msg
+    call pm_print_string
+
+    popad
+    ret
+
+tls_derive_shared_secret:
+    pushad
+
+    ; curve25519_private_key = deterministic client private key
+    mov esi, tls_client_private_key
+    mov edi, curve25519_private_key
+    call curve25519_fe_copy
+
+    ; Clamp private scalar for X25519
+    call curve25519_clamp_private
+
+    ; peer public key = ServerHello key_share
+    mov esi, rtl8139_tls_server_pubkey
+    mov edi, x25519_peer_public_key
+    call curve25519_fe_copy
+
+    ; shared_secret = X25519(client_private, server_public)
+    call x25519_generate_shared_secret_skeleton
+
+    mov esi, x25519_shared_secret
+    mov edi, tls_shared_secret
+    call curve25519_fe_copy
+
+    mov byte [tls_shared_secret_ready], 1
+
+    mov esi, tls_shared_secret_derived_msg
     call pm_print_string
 
     popad

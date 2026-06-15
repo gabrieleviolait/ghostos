@@ -891,6 +891,14 @@ rtl8139_tlstest_cmd:
     call rtl8139_tlstest_pause
 
     call rtl8139_tlsrecv_cmd
+
+    cmp word [rtl8139_tls_selected_group], 001Dh
+    jne .skip_shared_secret
+    cmp dword [rtl8139_tls_server_key_share_len], 32
+    jne .skip_shared_secret
+    call tls_derive_shared_secret
+
+.skip_shared_secret:
     call rtl8139_tlstest_pause
 
     call rtl8139_tcpstat
@@ -932,8 +940,15 @@ rtl8139_tlstest_reset_state:
     mov word [rtl8139_tls_selected_version], 0
     mov word [rtl8139_tls_selected_group], 0
     mov dword [rtl8139_tls_server_key_share_len], 0
+    mov byte [tls_shared_secret_ready], 0
 
     mov edi, rtl8139_tls_server_pubkey
+    mov ecx, 32
+    xor eax, eax
+    cld
+    rep stosb
+
+    mov edi, tls_shared_secret
     mov ecx, 32
     xor eax, eax
     cld

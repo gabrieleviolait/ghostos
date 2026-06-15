@@ -11,7 +11,7 @@
 OEMLabel            db 'GHOSTOS '
 BytesPerSector      dw 512
 SectorsPerCluster   db 1
-ReservedSectors     dw 163
+ReservedSectors     dw 165
 NumberOfFATs        db 2
 RootEntries         dw 224
 TotalSectors16      dw 2880

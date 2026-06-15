@@ -902,6 +902,7 @@ rtl8139_tlstest_cmd:
     cmp byte [tls_shared_secret_ready], 1
     jne .skip_handshake_secrets
     call tls_derive_handshake_secrets
+    call tls_derive_handshake_key_iv
 
 .skip_handshake_secrets:
     call rtl8139_tlstest_pause

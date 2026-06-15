@@ -568,3 +568,110 @@ tls_client_hs_secret_msg db 'client_hs_traffic_secret derived',13,0
 tls_server_hs_secret_msg db 'server_hs_traffic_secret derived',13,0
 tls_handshake_not_ready_msg db 'handshake secrets: shared_secret not ready',13,0
 
+
+
+; ============================================================
+; GhostTLS v0.6a - Handshake record protection keys
+; For TLS_CHACHA20_POLY1305_SHA256:
+;   key length = 32 bytes
+;   iv length  = 12 bytes
+; ============================================================
+
+tls_derive_handshake_key_iv:
+    pushad
+
+    cmp byte [tls_handshake_secrets_ready], 1
+    jne .not_ready
+
+    ; client_hs_key = HKDF-Expand-Label(client_hs_traffic_secret, "key", "", 32)
+    mov esi, tls_client_hs_traffic_secret
+    mov edi, tls_client_hs_key
+    mov edx, tls_label_key
+    mov ebx, tls_label_key_len
+    mov eax, tls_empty_context
+    xor ecx, ecx
+    call tls_hkdf_expand_label_32
+
+    mov esi, tls_client_hs_key_msg
+    call pm_print_string
+
+    ; server_hs_key = HKDF-Expand-Label(server_hs_traffic_secret, "key", "", 32)
+    mov esi, tls_server_hs_traffic_secret
+    mov edi, tls_server_hs_key
+    mov edx, tls_label_key
+    mov ebx, tls_label_key_len
+    mov eax, tls_empty_context
+    xor ecx, ecx
+    call tls_hkdf_expand_label_32
+
+    mov esi, tls_server_hs_key_msg
+    call pm_print_string
+
+    ; client_hs_iv = first 12 bytes of HKDF-Expand-Label(client_hs_traffic_secret, "iv", "", 32)
+    mov esi, tls_client_hs_traffic_secret
+    mov edi, tls_runtime_tmp32
+    mov edx, tls_label_iv
+    mov ebx, tls_label_iv_len
+    mov eax, tls_empty_context
+    xor ecx, ecx
+    call tls_hkdf_expand_label_32
+
+    mov esi, tls_runtime_tmp32
+    mov edi, tls_client_hs_iv
+    mov ecx, 12
+    cld
+    rep movsb
+
+    mov esi, tls_client_hs_iv_msg
+    call pm_print_string
+
+    ; server_hs_iv = first 12 bytes of HKDF-Expand-Label(server_hs_traffic_secret, "iv", "", 32)
+    mov esi, tls_server_hs_traffic_secret
+    mov edi, tls_runtime_tmp32
+    mov edx, tls_label_iv
+    mov ebx, tls_label_iv_len
+    mov eax, tls_empty_context
+    xor ecx, ecx
+    call tls_hkdf_expand_label_32
+
+    mov esi, tls_runtime_tmp32
+    mov edi, tls_server_hs_iv
+    mov ecx, 12
+    cld
+    rep movsb
+
+    mov esi, tls_server_hs_iv_msg
+    call pm_print_string
+
+    mov byte [tls_handshake_key_iv_ready], 1
+    jmp .done
+
+.not_ready:
+    mov esi, tls_key_iv_not_ready_msg
+    call pm_print_string
+
+.done:
+    popad
+    ret
+
+
+tls_client_hs_key times 32 db 0
+tls_server_hs_key times 32 db 0
+tls_client_hs_iv times 12 db 0
+tls_server_hs_iv times 12 db 0
+tls_runtime_tmp32 times 32 db 0
+tls_empty_context db 0
+tls_handshake_key_iv_ready db 0
+
+tls_label_key db 'key'
+tls_label_key_len equ $ - tls_label_key
+
+tls_label_iv db 'iv'
+tls_label_iv_len equ $ - tls_label_iv
+
+tls_client_hs_key_msg db 'client_hs_key derived',13,0
+tls_server_hs_key_msg db 'server_hs_key derived',13,0
+tls_client_hs_iv_msg db 'client_hs_iv derived',13,0
+tls_server_hs_iv_msg db 'server_hs_iv derived',13,0
+tls_key_iv_not_ready_msg db 'handshake key/iv: secrets not ready',13,0
+

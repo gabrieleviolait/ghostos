@@ -229,6 +229,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_tlsrecv
 
+    mov edi, pm_cmd_tlssecrets
+    call pm_starts_with_word
+    jc pm_do_tlssecrets
+
     mov edi, pm_cmd_tlstest
     call pm_starts_with_word
     jc pm_do_tlstest
@@ -585,6 +589,11 @@ pm_do_tlsrecv:
     call rtl8139_tlsrecv_cmd
     jmp shell32_loop
 
+pm_do_tlssecrets:
+    call tls_derive_shared_secret
+    call tls_derive_handshake_secrets
+    jmp shell32_loop
+
 pm_do_tlstest:
     call rtl8139_tlstest_cmd
     jmp shell32_loop
@@ -837,7 +846,7 @@ pm_help_msg db \
 'CORE: help cls clear echo version',13,\
 'MEM: mem heapinfo memmap pages',13,\
 'CRYPTO: sha256test hmacsha256test hkdfsha256test rngtest rfc7748test',13,\
-'TLS: tlsscheduletest tlshello tlsrecv tlstest',13,\
+'TLS: tlsscheduletest tlshello tlsrecv tlssecrets tlstest',13,\
 'PCI: lspci netdev regs stack uptime panic',13,\
 'NET: netup netstat netdiag netbar netreset netclear',13,\
 'MAC: mac setmac randommac',13,\
@@ -917,6 +926,7 @@ pm_cmd_tcpconnect db 'tcpconnect',0
 pm_cmd_tcpget db 'tcpget',0
 pm_cmd_tlshello db 'tlshello',0
 pm_cmd_tlsrecv db 'tlsrecv',0
+pm_cmd_tlssecrets db 'tlssecrets',0
 pm_cmd_tlstest db 'tlstest',0
 pm_cmd_tcprecv db 'tcprecv',0
 pm_cmd_tcprecvall db 'tcprecvall',0

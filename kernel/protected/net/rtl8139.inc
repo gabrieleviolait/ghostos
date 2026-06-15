@@ -899,6 +899,11 @@ rtl8139_tlstest_cmd:
     call tls_derive_shared_secret
 
 .skip_shared_secret:
+    cmp byte [tls_shared_secret_ready], 1
+    jne .skip_handshake_secrets
+    call tls_derive_handshake_secrets
+
+.skip_handshake_secrets:
     call rtl8139_tlstest_pause
 
     call rtl8139_tcpstat

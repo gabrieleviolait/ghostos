@@ -5261,8 +5261,20 @@ rtl8139_print_tls_serverhello_fields:
     shl eax, 8
     movzx ebx, byte [rtl8139_tcp_payload_buffer + edx + 1]
     or eax, ebx
+    mov [rtl8139_tls_sh_ext_len], eax
     call pm_print_uint32
     call pm_newline
+
+    ; extensions start after the 2-byte extensions length.
+    add edx, 2
+    mov [rtl8139_tls_sh_ext_start], edx
+    mov eax, [rtl8139_tls_sh_ext_len]
+    add eax, edx
+    mov [rtl8139_tls_sh_ext_end], eax
+    cmp eax, ecx
+    ja .short
+
+    call rtl8139_parse_tls_serverhello_extensions
 
     jmp .done
 
@@ -5272,6 +5284,177 @@ rtl8139_print_tls_serverhello_fields:
 
 .done:
     popad
+    ret
+
+rtl8139_parse_tls_serverhello_extensions:
+    pushad
+
+    mov esi, rtl8139_tls_sh_extensions_msg
+    call pm_print_string
+
+    mov eax, [rtl8139_tls_sh_ext_start]
+    mov [rtl8139_tls_sh_ext_ptr], eax
+
+.next_ext:
+    mov edx, [rtl8139_tls_sh_ext_ptr]
+    mov ebx, edx
+    add ebx, 4
+    cmp ebx, [rtl8139_tls_sh_ext_end]
+    ja .done
+
+    movzx eax, byte [rtl8139_tcp_payload_buffer + edx]
+    shl eax, 8
+    movzx ecx, byte [rtl8139_tcp_payload_buffer + edx + 1]
+    or eax, ecx
+    mov [rtl8139_tls_sh_ext_type], ax
+
+    movzx eax, byte [rtl8139_tcp_payload_buffer + edx + 2]
+    shl eax, 8
+    movzx ecx, byte [rtl8139_tcp_payload_buffer + edx + 3]
+    or eax, ecx
+    mov [rtl8139_tls_sh_cur_ext_len], eax
+
+    mov ebx, edx
+    add ebx, 4
+    add ebx, eax
+    cmp ebx, [rtl8139_tls_sh_ext_end]
+    ja .done
+
+    mov esi, rtl8139_tls_sh_ext_msg
+    call pm_print_string
+    mov ax, [rtl8139_tls_sh_ext_type]
+    call rtl8139_print_hex16
+
+    cmp word [rtl8139_tls_sh_ext_type], 002Bh
+    je .print_supported_versions_name
+    cmp word [rtl8139_tls_sh_ext_type], 0033h
+    je .print_key_share_name
+
+    call pm_newline
+    jmp .print_ext_len
+
+.print_supported_versions_name:
+    mov esi, rtl8139_tls_sh_supported_versions_name_msg
+    call pm_print_string
+    jmp .print_ext_len
+
+.print_key_share_name:
+    mov esi, rtl8139_tls_sh_key_share_name_msg
+    call pm_print_string
+
+.print_ext_len:
+    mov esi, rtl8139_tls_sh_ext_len_msg
+    call pm_print_string
+    mov eax, [rtl8139_tls_sh_cur_ext_len]
+    call pm_print_uint32
+    call pm_newline
+
+    cmp word [rtl8139_tls_sh_ext_type], 002Bh
+    je .supported_versions
+    cmp word [rtl8139_tls_sh_ext_type], 0033h
+    je .key_share
+    jmp .advance
+
+.supported_versions:
+    cmp dword [rtl8139_tls_sh_cur_ext_len], 2
+    jb .advance
+
+    mov edx, [rtl8139_tls_sh_ext_ptr]
+    add edx, 4
+    movzx eax, byte [rtl8139_tcp_payload_buffer + edx]
+    shl eax, 8
+    movzx ecx, byte [rtl8139_tcp_payload_buffer + edx + 1]
+    or eax, ecx
+    mov [rtl8139_tls_selected_version], ax
+
+    mov esi, rtl8139_tls_sh_selected_version_msg
+    call pm_print_string
+    mov ax, [rtl8139_tls_selected_version]
+    call rtl8139_print_hex16
+    call pm_newline
+    call pm_newline
+    jmp .advance
+
+.key_share:
+    cmp dword [rtl8139_tls_sh_cur_ext_len], 4
+    jb .advance
+
+    mov edx, [rtl8139_tls_sh_ext_ptr]
+    add edx, 4
+
+    movzx eax, byte [rtl8139_tcp_payload_buffer + edx]
+    shl eax, 8
+    movzx ecx, byte [rtl8139_tcp_payload_buffer + edx + 1]
+    or eax, ecx
+    mov [rtl8139_tls_selected_group], ax
+
+    movzx eax, byte [rtl8139_tcp_payload_buffer + edx + 2]
+    shl eax, 8
+    movzx ecx, byte [rtl8139_tcp_payload_buffer + edx + 3]
+    or eax, ecx
+    mov [rtl8139_tls_server_key_share_len], eax
+
+    mov esi, rtl8139_tls_sh_group_msg
+    call pm_print_string
+    mov ax, [rtl8139_tls_selected_group]
+    call rtl8139_print_hex16
+    cmp word [rtl8139_tls_selected_group], 001Dh
+    jne .group_newline
+    mov esi, rtl8139_tls_sh_x25519_name_msg
+    call pm_print_string
+.group_newline:
+    call pm_newline
+
+    mov esi, rtl8139_tls_sh_key_len_msg
+    call pm_print_string
+    mov eax, [rtl8139_tls_server_key_share_len]
+    call pm_print_uint32
+    call pm_newline
+
+    cmp word [rtl8139_tls_selected_group], 001Dh
+    jne .advance
+    cmp dword [rtl8139_tls_server_key_share_len], 32
+    jne .advance
+    cmp dword [rtl8139_tls_sh_cur_ext_len], 36
+    jb .advance
+
+    add edx, 4
+    mov esi, rtl8139_tcp_payload_buffer
+    add esi, edx
+    mov edi, rtl8139_tls_server_pubkey
+    mov ecx, 32
+    cld
+    rep movsb
+
+    mov esi, rtl8139_tls_sh_pubkey_saved_msg
+    call pm_print_string
+    call pm_newline
+
+.advance:
+    mov eax, [rtl8139_tls_sh_ext_ptr]
+    add eax, 4
+    add eax, [rtl8139_tls_sh_cur_ext_len]
+    mov [rtl8139_tls_sh_ext_ptr], eax
+    jmp .next_ext
+
+.done:
+    popad
+    ret
+
+rtl8139_print_hex16:
+    push eax
+    push ebx
+
+    mov bx, ax
+    mov esi, pm_hex_prefix
+    call pm_print_string
+    mov al, bh
+    call pm_print_hex8
+    mov al, bl
+    call pm_print_hex8
+
+    pop ebx
+    pop eax
     ret
 
 rtl8139_print_tls_payload_info:
@@ -5677,3 +5860,24 @@ rtl8139_tls_sh_legacy_msg db 'sh_legacy=',0
 rtl8139_tls_sh_cipher_msg db 'sh_cipher=',0
 rtl8139_tls_sh_extlen_msg db 'sh_ext_len=',0
 rtl8139_tls_sh_short_msg db 'ServerHello: short',13,0
+rtl8139_tls_sh_extensions_msg db 'ServerHello extensions',13,0
+rtl8139_tls_sh_ext_msg db 'ext=',0
+rtl8139_tls_sh_ext_len_msg db 'ext_len=',0
+rtl8139_tls_sh_supported_versions_name_msg db ' supported_versions',13,0
+rtl8139_tls_sh_key_share_name_msg db ' key_share',13,0
+rtl8139_tls_sh_selected_version_msg db 'selected_version=',0
+rtl8139_tls_sh_group_msg db 'group=',0
+rtl8139_tls_sh_x25519_name_msg db ' x25519',0
+rtl8139_tls_sh_key_len_msg db 'key_len=',0
+rtl8139_tls_sh_pubkey_saved_msg db 'server_pubkey saved',13,0
+
+rtl8139_tls_sh_ext_start dd 0
+rtl8139_tls_sh_ext_end dd 0
+rtl8139_tls_sh_ext_ptr dd 0
+rtl8139_tls_sh_ext_len dd 0
+rtl8139_tls_sh_cur_ext_len dd 0
+rtl8139_tls_sh_ext_type dw 0
+rtl8139_tls_selected_version dw 0
+rtl8139_tls_selected_group dw 0
+rtl8139_tls_server_key_share_len dd 0
+rtl8139_tls_server_pubkey times 32 db 0

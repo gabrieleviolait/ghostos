@@ -825,6 +825,9 @@ rtl8139_tcpconnect_cmd:
     call pm_print_string
     ret
 
+rtl8139_tcpconnect_start:
+    jmp rtl8139_tcpconnect_cmd.port_ok
+
 rtl8139_tcpget_cmd:
     cmp byte [rtl8139_tcp_state], TCP_STATE_ESTABLISHED
     je .established
@@ -861,6 +864,81 @@ rtl8139_tlshello_cmd:
 
     mov esi, rtl8139_tls_clienthello_sent_msg
     call pm_print_string
+    ret
+
+
+rtl8139_tlstest_cmd:
+    mov esi, rtl8139_tlstest_msg
+    call pm_print_string
+
+    call rtl8139_tlstest_reset_state
+
+    call rtl8139_netup
+    call rtl8139_tlstest_pause
+
+    call rtl8139_pingtest
+    call rtl8139_tlstest_pause
+
+    mov word [rtl8139_tcp_dst_port], 4433
+    call rtl8139_tcpconnect_start
+    call rtl8139_tlstest_pause
+
+    cmp byte [rtl8139_tcp_state], TCP_STATE_ESTABLISHED
+    jne .done
+
+    call rtl8139_tlshello_cmd
+    call rtl8139_tlstest_pause
+
+    call rtl8139_tlsrecv_cmd
+    call rtl8139_tlstest_pause
+
+    call rtl8139_tcpstat
+
+.done:
+    ret
+
+rtl8139_tlstest_pause:
+    push eax
+    push esi
+    mov esi, rtl8139_tlstest_press_key_msg
+    call pm_print_string
+    call pm_kbd_get_char
+    call pm_newline
+    pop esi
+    pop eax
+    ret
+
+rtl8139_tlstest_reset_state:
+    pushad
+
+    mov byte [rtl8139_tcp_state], TCP_STATE_CLOSED
+    mov dword [rtl8139_tcp_tx_count], 0
+    mov dword [rtl8139_tcp_rx_count], 0
+    mov dword [rtl8139_tcp_synack_count], 0
+    mov dword [rtl8139_tcp_ack_tx_count], 0
+    mov dword [rtl8139_tcp_data_tx_count], 0
+    mov dword [rtl8139_tcp_data_rx_count], 0
+    mov dword [rtl8139_tcp_data_ack_tx_count], 0
+    mov dword [rtl8139_tcp_fin_rx_count], 0
+    mov dword [rtl8139_tcp_fin_ack_tx_count], 0
+
+    mov word [rtl8139_tcp_last_payload_len], 0
+    mov word [rtl8139_tcp_last_payload_wire_len], 0
+    mov dword [rtl8139_tcp_last_src_ip], 0
+    mov word [rtl8139_tcp_last_src_port], 0
+    mov byte [rtl8139_tcp_last_flags], 0
+
+    mov word [rtl8139_tls_selected_version], 0
+    mov word [rtl8139_tls_selected_group], 0
+    mov dword [rtl8139_tls_server_key_share_len], 0
+
+    mov edi, rtl8139_tls_server_pubkey
+    mov ecx, 32
+    xor eax, eax
+    cld
+    rep stosb
+
+    popad
     ret
 
 rtl8139_tcprecv_cmd:
@@ -5824,6 +5902,8 @@ rtl8139_tcp_fin_closed_msg db 'TCP state: CLOSED',13,0
 
 ; GhostTLS TCP transport messages
 rtl8139_tls_clienthello_sent_msg db 'TLS ClientHello sent',13,0
+rtl8139_tlstest_msg db 'GhostTLS test',13,0
+rtl8139_tlstest_press_key_msg db '-- press key --',13,0
 
 rtl8139_tcp_dst_port_4433_text db '4433',0
 

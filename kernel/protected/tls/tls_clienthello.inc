@@ -6,23 +6,23 @@
 ; TLSPlaintext:
 ;   type    = 0x16 handshake
 ;   version = 0x0301 legacy record version
-;   length  = 0x0072
+;   length  = 0x0074
 ;
 ; Handshake:
 ;   type   = 0x01 ClientHello
-;   length = 0x00006e
+;   length = 0x000070
 ;
 ; ClientHello body length:
 ;   fixed clienthello fields = 43 bytes
 ;   extensions              = 67 bytes
-;   total                   = 110 bytes
+;   total                   = 112 bytes
 
 tls_clienthello_payload:
     ; TLS record header
-    db 016h, 003h, 001h, 000h, 072h
+    db 016h, 003h, 001h, 000h, 074h
 
-    ; Handshake header: ClientHello, length 110
-    db 001h, 000h, 000h, 06Eh
+    ; Handshake header: ClientHello, length 112
+    db 001h, 000h, 000h, 070h
 
     ; legacy_version TLS 1.2
     db 003h, 003h
@@ -36,9 +36,11 @@ tls_clienthello_payload:
     ; legacy_session_id length = 0
     db 000h
 
-    ; cipher_suites length = 2
+    ; cipher_suites length = 4
+    ; TLS_CHACHA20_POLY1305_SHA256 = 0x1303
     ; TLS_AES_128_GCM_SHA256 = 0x1301
-    db 000h, 002h
+    db 000h, 004h
+    db 013h, 003h
     db 013h, 001h
 
     ; compression_methods length = 1, null compression

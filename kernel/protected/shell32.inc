@@ -111,6 +111,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_torrelays
 
+    mov edi, pm_cmd_torpick
+    call pm_starts_with_word
+    jc pm_do_torpick
+
     mov edi, pm_cmd_run
     call pm_starts_with_word
     jc pm_do_run
@@ -596,6 +600,176 @@ torrelays_print_line:
 .done:
     ret
 
+pm_do_torpick:
+    mov esi, pm_cmd_buffer
+    call pm_skip_first_word
+    call pm_skip_spaces
+    mov al, [esi]
+    cmp al, '1'
+    jb .not_found
+    cmp al, '9'
+    ja .not_found
+    mov [torpick_target], al
+
+    mov esi, torrelays_file_name
+    mov edi, page_buffer
+    mov ecx, PAGE_BUFFER_SIZE-1
+    call pm_fat12_read_file
+    jc .load_error
+
+    mov esi, page_buffer
+    call torpick_find_relay
+    jc .not_found
+    jmp shell32_loop
+
+.load_error:
+    mov esi, torrelays_load_error_msg
+    call pm_print_string
+    call pm_print_fat12_error
+    jmp shell32_loop
+
+.not_found:
+    mov esi, torpick_not_found_msg
+    call pm_print_string
+    jmp shell32_loop
+
+torpick_find_relay:
+    pushad
+
+.next_line:
+    cmp byte [esi], 0
+    je .not_found
+
+    cmp byte [esi], 'R'
+    jne .skip_line
+    cmp byte [esi + 1], 'e'
+    jne .skip_line
+    cmp byte [esi + 2], 'l'
+    jne .skip_line
+    cmp byte [esi + 3], 'a'
+    jne .skip_line
+    cmp byte [esi + 4], 'y'
+    jne .skip_line
+    cmp byte [esi + 5], ' '
+    jne .skip_line
+    mov al, [torpick_target]
+    cmp [esi + 6], al
+    jne .skip_line
+    cmp byte [esi + 7], ':'
+    jne .skip_line
+    call torpick_print_selected
+    popad
+    clc
+    ret
+
+.skip_line:
+    cmp byte [esi], 0
+    je .not_found
+    cmp byte [esi], 10
+    je .line_done
+    inc esi
+    jmp .skip_line
+
+.line_done:
+    inc esi
+    jmp .next_line
+
+.not_found:
+    popad
+    stc
+    ret
+
+torpick_print_selected:
+    push esi
+
+    mov esi, torpick_selected_msg
+    call pm_print_string
+
+    mov esi, torpick_index_msg
+    call pm_print_string
+    mov al, [torpick_target]
+    call pm_print_char
+    call pm_newline
+
+    pop esi
+    add esi, 9
+
+    mov edi, torpick_nickname_msg
+    call torpick_print_until_space
+
+    call pm_skip_spaces
+
+    mov edi, torpick_ip_msg
+    call torpick_print_until_colon
+    inc esi
+
+    mov edi, torpick_orport_msg
+    call torpick_print_until_space
+
+    call pm_skip_spaces
+    add esi, 6
+    mov edi, torpick_flags_msg
+    call torpick_print_until_eol
+
+.find_ntor:
+    cmp byte [esi], 0
+    je .done
+    cmp byte [esi], 10
+    je .ntor_line
+    inc esi
+    jmp .find_ntor
+
+.ntor_line:
+    inc esi
+    add esi, 5
+    mov edi, torpick_ntor_msg
+    call torpick_print_until_eol
+
+.done:
+    ret
+
+torpick_print_until_space:
+    mov [torpick_label_ptr], edi
+    mov byte [torpick_delim], ' '
+    jmp torpick_print_field
+
+torpick_print_until_colon:
+    mov [torpick_label_ptr], edi
+    mov byte [torpick_delim], ':'
+    jmp torpick_print_field
+
+torpick_print_until_eol:
+    mov [torpick_label_ptr], edi
+    mov byte [torpick_delim], 0
+
+torpick_print_field:
+    push esi
+    mov esi, [torpick_label_ptr]
+    call pm_print_string
+    pop esi
+
+.next:
+    mov al, [esi]
+    cmp al, 0
+    je .newline
+    cmp al, 13
+    je .newline
+    cmp al, 10
+    je .newline
+    cmp byte [torpick_delim], 0
+    je .emit
+    cmp al, [torpick_delim]
+    je .newline
+
+.emit:
+    call pm_print_char
+    inc esi
+    jmp .next
+
+.newline:
+    call pm_newline
+    ret
+
 pm_do_run:
     mov esi, pm_cmd_buffer
     call pm_skip_first_word
@@ -1009,7 +1183,7 @@ pm_help_msg db \
 'RX1: rxdump rxpoll rxpeek rxpacket rxipv4dump',13,\
 'RX2: rxkick rxdebug rxreset rxmode rxtest rxstatus',13,\
 'TASK: tasks yield',13,\
-'GHOSTTOR: torrelays',13,\
+'GHOSTTOR: torrelays torpick',13,\
 'FS: ls cat browse run halt',13,0
 pm_version_msg db 'ghost32',13,0
 pm_unknown_msg db '?',13,0
@@ -1050,6 +1224,7 @@ pm_cmd_ls db 'ls',0
 pm_cmd_cat db 'cat',0
 pm_cmd_browse db 'browse',0
 pm_cmd_torrelays db 'torrelays',0
+pm_cmd_torpick db 'torpick',0
 pm_cmd_run db 'run',0
 pm_cmd_version db 'version',0
 pm_cmd_mem db 'mem',0
@@ -1127,3 +1302,14 @@ torrelays_ntor_prefix_msg db '  ',0
 torrelays_count_msg db 'relay_count=',0
 torrelays_count db 0
 torrelays_line_ptr dd 0
+torpick_selected_msg db 'GhostTor selected relay',13,0
+torpick_not_found_msg db 'GhostTor relay not found',13,0
+torpick_index_msg db 'index=',0
+torpick_nickname_msg db 'nickname=',0
+torpick_ip_msg db 'ip=',0
+torpick_orport_msg db 'orport=',0
+torpick_flags_msg db 'flags=',0
+torpick_ntor_msg db 'ntor=',0
+torpick_target db 0
+torpick_delim db 0
+torpick_label_ptr dd 0

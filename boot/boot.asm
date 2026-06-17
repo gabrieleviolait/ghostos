@@ -11,7 +11,7 @@
 OEMLabel            db 'GHOSTOS '
 BytesPerSector      dw 512
 SectorsPerCluster   db 1
-ReservedSectors     dw 177
+ReservedSectors     dw 178
 NumberOfFATs        db 2
 RootEntries         dw 224
 TotalSectors16      dw 2880
@@ -35,7 +35,7 @@ BOOT_STACK_TOP         equ 0xF000
 KERNEL_SEG             equ 0x0000
 KERNEL_OFFSET          equ 0x1000
 KERNEL_LBA             equ 1
-KERNEL_SECTORS         equ 176
+KERNEL_SECTORS         equ 177
 
 SECTORS_PER_TRACK      equ 18
 HEADS                  equ 2

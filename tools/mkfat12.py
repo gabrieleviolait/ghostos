@@ -16,7 +16,7 @@ from pathlib import Path
 BYTES_PER_SECTOR = 512
 TOTAL_SECTORS = 2880
 SECTORS_PER_CLUSTER = 1
-KERNEL_SECTORS = 176
+KERNEL_SECTORS = 177
 RESERVED_SECTORS = 1 + KERNEL_SECTORS
 FATS = 2
 ROOT_ENTRIES = 224
@@ -30,6 +30,8 @@ MEDIA = 0xF0
 
 def short_name(path: Path) -> bytes:
     name = path.name.upper()
+    if name == "TORRELAYS.GHT":
+        name = "TORRELAY.GHT"
     if "." in name:
         stem, ext = name.rsplit(".", 1)
     else:

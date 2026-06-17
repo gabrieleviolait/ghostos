@@ -10,6 +10,7 @@ AEAD_MAC_TEST_CT_LEN equ 114
 AEAD_MAC_TEST_AAD_PAD_LEN equ 4
 AEAD_MAC_TEST_CT_PAD_LEN equ 14
 AEAD_MAC_TEST_INPUT_LEN equ 160
+AEAD_DECRYPT_BLOCK_LEN equ 64
 
 aeadmactest:
     pushad
@@ -42,6 +43,31 @@ aeadmactest:
 
 .pass:
     mov esi, aead_mac_pass_msg
+    call pm_print_string
+
+.done:
+    popad
+    ret
+
+aeaddecrypttest:
+    pushad
+
+    call aead_decrypt_test_ciphertext
+
+    mov esi, aead_mac_input
+    mov edi, aead_decrypt_expected_plaintext
+    mov ecx, AEAD_MAC_TEST_CT_LEN
+    call poly1305_memcmp
+
+    cmp eax, 1
+    je .pass
+
+    mov esi, aead_decrypt_fail_msg
+    call pm_print_string
+    jmp .done
+
+.pass:
+    mov esi, aead_decrypt_pass_msg
     call pm_print_string
 
 .done:
@@ -91,8 +117,65 @@ aead_mac_store64_le:
     mov dword [edi + 4], 0
     ret
 
+aead_decrypt_test_ciphertext:
+    pushad
+
+    mov dword [aead_decrypt_src_ptr], aead_mac_test_ciphertext
+    mov dword [aead_decrypt_dst_ptr], aead_mac_input
+    mov dword [aead_decrypt_remaining], AEAD_MAC_TEST_CT_LEN
+    mov dword [aead_decrypt_counter], 1
+
+.next_block:
+    cmp dword [aead_decrypt_remaining], 0
+    je .done
+
+    mov esi, aead_mac_test_key
+    mov edx, aead_mac_test_nonce
+    mov eax, [aead_decrypt_counter]
+    mov edi, aead_mac_chacha_block
+    call chacha20_block
+
+    mov eax, [aead_decrypt_remaining]
+    cmp eax, AEAD_DECRYPT_BLOCK_LEN
+    jbe .take_ready
+    mov eax, AEAD_DECRYPT_BLOCK_LEN
+
+.take_ready:
+    mov [aead_decrypt_take_len], eax
+
+    mov esi, [aead_decrypt_src_ptr]
+    mov edi, [aead_decrypt_dst_ptr]
+    mov edx, aead_mac_chacha_block
+    mov ecx, [aead_decrypt_take_len]
+
+.xor_bytes:
+    cmp ecx, 0
+    je .block_done
+    mov al, [esi]
+    xor al, [edx]
+    mov [edi], al
+    inc esi
+    inc edi
+    inc edx
+    dec ecx
+    jmp .xor_bytes
+
+.block_done:
+    mov eax, [aead_decrypt_take_len]
+    add dword [aead_decrypt_src_ptr], eax
+    add dword [aead_decrypt_dst_ptr], eax
+    sub dword [aead_decrypt_remaining], eax
+    inc dword [aead_decrypt_counter]
+    jmp .next_block
+
+.done:
+    popad
+    ret
+
 aead_mac_pass_msg db 'AEAD MAC PASS',13,0
 aead_mac_fail_msg db 'AEAD MAC FAIL',13,0
+aead_decrypt_pass_msg db 'AEAD DECRYPT PASS',13,0
+aead_decrypt_fail_msg db 'AEAD DECRYPT FAIL',13,0
 
 aead_mac_test_aad:
     db 050h, 051h, 052h, 053h, 0C0h, 0C1h, 0C2h, 0C3h
@@ -129,6 +212,14 @@ aead_mac_expected_tag:
     db 01Ah, 0E1h, 00Bh, 059h, 04Fh, 009h, 0E2h, 06Ah
     db 07Eh, 090h, 02Eh, 0CBh, 0D0h, 060h, 006h, 091h
 
+aead_decrypt_expected_plaintext:
+    db 'Ladies and Gentlemen of the class of ',027h,'99: If I could offer you only one tip for the future, sunscreen would be it.'
+
+aead_decrypt_src_ptr dd 0
+aead_decrypt_dst_ptr dd 0
+aead_decrypt_remaining dd 0
+aead_decrypt_counter dd 0
+aead_decrypt_take_len dd 0
 aead_mac_chacha_block times 64 db 0
 aead_mac_input times AEAD_MAC_TEST_INPUT_LEN db 0
 aead_mac_test_tag times 16 db 0

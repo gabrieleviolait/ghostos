@@ -159,6 +159,12 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_poly1305test
 
+    ; aeadmactest
+    mov esi, pm_cmd_buffer
+    mov edi, cmd_aeadmactest
+    call pm_starts_with_word
+    jc pm_do_aeadmactest
+
     ; tlsscheduletest
     mov esi, pm_cmd_buffer
     mov edi, cmd_tlsscheduletest
@@ -529,6 +535,10 @@ pm_do_poly1305test:
     call poly1305test
     jmp shell32_loop
 
+pm_do_aeadmactest:
+    call aeadmactest
+    jmp shell32_loop
+
 pm_do_tlsscheduletest:
     call tls_key_schedule_test
     jmp shell32_loop
@@ -865,7 +875,7 @@ pm_help_msg db \
 'Commands:',13,\
 'CORE: help cls clear echo version',13,\
 'MEM: mem heapinfo memmap pages',13,\
-'CRYPTO: sha256test hmacsha256test hkdfsha256test chacha20test poly1305test',13,\
+'CRYPTO: sha256test hmacsha256test hkdfsha256test chacha20test poly1305test aeadmactest',13,\
 'CRYPTO2: rngtest rfc7748test',13,\
 'TLS: tlsscheduletest tlshello tlsrecv tlssecrets tlstest',13,\
 'PCI: lspci netdev regs stack uptime panic',13,\
@@ -929,6 +939,7 @@ cmd_hmacsha256test db 'hmacsha256test',0
 cmd_hkdfsha256test db 'hkdfsha256test',0
 cmd_chacha20test db 'chacha20test',0
 cmd_poly1305test db 'poly1305test',0
+cmd_aeadmactest db 'aeadmactest',0
 cmd_tlsscheduletest db 'tlsscheduletest',0
 pm_cmd_rngtest db 'rngtest',0
 pm_cmd_rfc7748test db 'rfc7748test',0

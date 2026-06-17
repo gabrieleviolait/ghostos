@@ -27,6 +27,7 @@ The project is developed as a learning and research platform to explore how mode
 | X25519                      | ✅ Working      |
 | TLS Key Schedule Foundations | ✅ Experimental |
 | TLS Record Parsing          | ✅ Experimental |
+| GhostTor Relay Seed         | ✅ Experimental |
 | Tor Link Protocol           | ⬜ Planned      |
 
 ---
@@ -59,6 +60,14 @@ The project is developed as a learning and research platform to explore how mode
 * ACK for received TCP payload data
 * TCP FIN receive and close handling
 * Packet validation using Wireshark
+
+### GhostTor Bootstrap
+
+* Static relay seed file in the FAT12 image
+* `torrelays` shell command
+* Minimal parser for relay lines and ntor keys
+* Relay candidate count output
+* No Tor link connection, circuit creation, or anonymity yet
 
 ### Cryptography
 
@@ -144,6 +153,8 @@ The networking stack is functional for low-level communication testing and now i
 GhostNet currently supports ARP gateway discovery, ICMP ping testing, TCP connection establishment, HTTP `GET / HTTP/1.0` payload transmission, TCP payload receive/dump, multi-segment receive loops, ACKs for received payload data, and FIN close handling. This has been validated against a local Python HTTP server on `10.0.2.2:8080`.
 
 The cryptographic subsystem now includes RFC7748-validated X25519, RFC5869-validated HKDF-SHA256, real GhostTLS X25519 key exchange, transcript hash construction, TLS 1.3 handshake secret derivation, traffic secret derivation, selected cipher reporting, and a TLS record parser capable of extracting ServerHello extensions. The current TLS path has negotiated ChaCha20-Poly1305 with `selected_cipher=0x1303`; the next block is handshake key/IV derivation and ChaCha20-Poly1305 record protection groundwork.
+
+GhostTor has started as a separate native MVP track. The current stage adds a static relay seed file (`TORRELAYS.GHT`) and a `torrelays` command that reads relay candidates and ntor keys from the FAT12 image. This is bootstrap/debug infrastructure only, not an anonymous Tor client.
 
 ---
 
@@ -330,28 +341,43 @@ HTTP/1.1 200 OK
 ...
 ```
 
-### After TLS: GhostTor
+### GhostTor Native MVP
 
 #### GhostTor v0.1
+
+* ✅ Static relay seed file: `pages/TORRELAYS.GHT`
+* ✅ FAT12 8.3 image alias: `TORRELAY.GHT`
+* ✅ `torrelays` shell command
+* ✅ Minimal parser for `Relay ...` and `ntor=...` lines
+* ✅ Relay candidate count output
+
+#### GhostTor v0.2
+
+* Directory HTTP client experiment
+* `torconsensus` command
+* Download current consensus over plain HTTP
+* Minimal consensus parsing
+
+#### GhostTor v0.3
 
 * TLS toward a Tor relay
 * VERSIONS cell
 * NETINFO cell
 
-#### GhostTor v0.2
+#### GhostTor v0.4
 
 * CREATE2 / CREATED2
 * ntor handshake
 * Circuit keys
 
-#### GhostTor v0.3
+#### GhostTor v0.5
 
 * RELAY_BEGIN
 * RELAY_DATA
 * RELAY_END
 * HTTP request through an exit node
 
-#### GhostTor v0.4+
+#### GhostTor v0.6+
 
 * Multi-hop circuits
 * Directory consensus / relay selection
@@ -407,6 +433,7 @@ tlstest
 tlssecrets
 rngtest
 rfc7748test
+torrelays
 ```
 
 ---

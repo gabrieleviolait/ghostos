@@ -65,8 +65,11 @@ The project is developed as a learning and research platform to explore how mode
 
 * Static relay seed file in the FAT12 image
 * `torrelays` shell command
+* `torpick N` relay selection command
+* `torstate` selected relay state dump
 * Minimal parser for relay lines and ntor keys
 * Relay candidate count output
+* Selected relay state storage for future GhostTor steps
 * No Tor link connection, circuit creation, or anonymity yet
 
 ### Cryptography
@@ -154,7 +157,7 @@ GhostNet currently supports ARP gateway discovery, ICMP ping testing, TCP connec
 
 The cryptographic subsystem now includes RFC7748-validated X25519, RFC5869-validated HKDF-SHA256, real GhostTLS X25519 key exchange, transcript hash construction, TLS 1.3 handshake secret derivation, traffic secret derivation, selected cipher reporting, and a TLS record parser capable of extracting ServerHello extensions. The current TLS path has negotiated ChaCha20-Poly1305 with `selected_cipher=0x1303`; the next block is handshake key/IV derivation and ChaCha20-Poly1305 record protection groundwork.
 
-GhostTor has started as a separate native MVP track. The current stage adds a static relay seed file (`TORRELAYS.GHT`) and a `torrelays` command that reads relay candidates and ntor keys from the FAT12 image. This is bootstrap/debug infrastructure only, not an anonymous Tor client.
+GhostTor has started as a separate native MVP track. The current stage adds a static relay seed file (`TORRELAYS.GHT`), a `torrelays` command that reads relay candidates and ntor keys from the FAT12 image, a `torpick N` relay selection command, and a `torstate` diagnostic state dump. This is bootstrap/debug infrastructure only, not an anonymous Tor client.
 
 ---
 
@@ -348,6 +351,9 @@ HTTP/1.1 200 OK
 * ✅ Static relay seed file: `pages/TORRELAYS.GHT`
 * ✅ FAT12 8.3 image alias: `TORRELAY.GHT`
 * ✅ `torrelays` shell command
+* ✅ `torpick 1/2/3` relay selection command
+* ✅ Selected relay state storage
+* ✅ `torstate` diagnostic command
 * ✅ Minimal parser for `Relay ...` and `ntor=...` lines
 * ✅ Relay candidate count output
 
@@ -434,6 +440,8 @@ tlssecrets
 rngtest
 rfc7748test
 torrelays
+torpick 1
+torstate
 ```
 
 ---

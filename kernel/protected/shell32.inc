@@ -115,6 +115,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_torpick
 
+    mov edi, pm_cmd_torstate
+    call pm_starts_with_word
+    jc pm_do_torstate
+
     mov edi, pm_cmd_run
     call pm_starts_with_word
     jc pm_do_run
@@ -609,6 +613,12 @@ pm_do_torpick:
     jb .not_found
     cmp al, '9'
     ja .not_found
+    cmp byte [esi + 1], 0
+    je .index_ok
+    cmp byte [esi + 1], ' '
+    jne .not_found
+
+.index_ok:
     mov [torpick_target], al
 
     mov esi, torrelays_file_name
@@ -630,6 +640,23 @@ pm_do_torpick:
 
 .not_found:
     mov esi, torpick_not_found_msg
+    call pm_print_string
+    jmp shell32_loop
+
+pm_do_torstate:
+    mov esi, torstate_header_msg
+    call pm_print_string
+
+    cmp byte [ghosttor_selected_ready], 1
+    jne .not_selected
+
+    mov esi, torstate_selected_yes_msg
+    call pm_print_string
+    call ghosttor_print_selected_fields
+    jmp shell32_loop
+
+.not_selected:
+    mov esi, torstate_selected_no_msg
     call pm_print_string
     jmp shell32_loop
 
@@ -680,36 +707,36 @@ torpick_find_relay:
     ret
 
 torpick_print_selected:
-    push esi
-
-    mov esi, torpick_selected_msg
-    call pm_print_string
-
-    mov esi, torpick_index_msg
-    call pm_print_string
+    mov byte [ghosttor_selected_ready], 0
     mov al, [torpick_target]
-    call pm_print_char
-    call pm_newline
+    mov [ghosttor_selected_index], al
 
-    pop esi
     add esi, 9
 
-    mov edi, torpick_nickname_msg
-    call torpick_print_until_space
+    mov edi, ghosttor_selected_nickname
+    mov ecx, 31
+    mov byte [torpick_delim], ' '
+    call torpick_copy_field
 
     call pm_skip_spaces
 
-    mov edi, torpick_ip_msg
-    call torpick_print_until_colon
+    mov edi, ghosttor_selected_ip
+    mov ecx, 15
+    mov byte [torpick_delim], ':'
+    call torpick_copy_field
     inc esi
 
-    mov edi, torpick_orport_msg
-    call torpick_print_until_space
+    mov edi, ghosttor_selected_orport
+    mov ecx, 7
+    mov byte [torpick_delim], ' '
+    call torpick_copy_field
 
     call pm_skip_spaces
     add esi, 6
-    mov edi, torpick_flags_msg
-    call torpick_print_until_eol
+    mov edi, ghosttor_selected_flags
+    mov ecx, 63
+    mov byte [torpick_delim], 0
+    call torpick_copy_field
 
 .find_ntor:
     cmp byte [esi], 0
@@ -722,51 +749,80 @@ torpick_print_selected:
 .ntor_line:
     inc esi
     add esi, 5
-    mov edi, torpick_ntor_msg
-    call torpick_print_until_eol
+    mov edi, ghosttor_selected_ntor
+    mov ecx, 79
+    mov byte [torpick_delim], 0
+    call torpick_copy_field
+
+    mov byte [ghosttor_selected_ready], 1
+    mov esi, torpick_selected_msg
+    call pm_print_string
+    call ghosttor_print_selected_fields
 
 .done:
     ret
 
-torpick_print_until_space:
-    mov [torpick_label_ptr], edi
-    mov byte [torpick_delim], ' '
-    jmp torpick_print_field
-
-torpick_print_until_colon:
-    mov [torpick_label_ptr], edi
-    mov byte [torpick_delim], ':'
-    jmp torpick_print_field
-
-torpick_print_until_eol:
-    mov [torpick_label_ptr], edi
-    mov byte [torpick_delim], 0
-
-torpick_print_field:
-    push esi
-    mov esi, [torpick_label_ptr]
-    call pm_print_string
-    pop esi
-
-.next:
-    mov al, [esi]
-    cmp al, 0
-    je .newline
-    cmp al, 13
-    je .newline
-    cmp al, 10
-    je .newline
+torpick_copy_field:
+    cmp byte [esi], 0
+    je .done
+    cmp byte [esi], 13
+    je .done
+    cmp byte [esi], 10
+    je .done
     cmp byte [torpick_delim], 0
-    je .emit
-    cmp al, [torpick_delim]
-    je .newline
+    je .store_or_skip
+    mov al, [torpick_delim]
+    cmp [esi], al
+    je .done
 
-.emit:
-    call pm_print_char
+.store_or_skip:
+    cmp ecx, 0
+    je .skip_store
+    mov al, [esi]
+    mov [edi], al
+    inc edi
+    dec ecx
+
+.skip_store:
     inc esi
-    jmp .next
+    jmp torpick_copy_field
 
-.newline:
+.done:
+    mov byte [edi], 0
+    ret
+
+ghosttor_print_selected_fields:
+    mov esi, torpick_index_msg
+    call pm_print_string
+    mov al, [ghosttor_selected_index]
+    call pm_print_char
+    call pm_newline
+
+    mov esi, torpick_nickname_msg
+    mov edi, ghosttor_selected_nickname
+    call ghosttor_print_string_field
+
+    mov esi, torpick_ip_msg
+    mov edi, ghosttor_selected_ip
+    call ghosttor_print_string_field
+
+    mov esi, torpick_orport_msg
+    mov edi, ghosttor_selected_orport
+    call ghosttor_print_string_field
+
+    mov esi, torpick_flags_msg
+    mov edi, ghosttor_selected_flags
+    call ghosttor_print_string_field
+
+    mov esi, torpick_ntor_msg
+    mov edi, ghosttor_selected_ntor
+    call ghosttor_print_string_field
+    ret
+
+ghosttor_print_string_field:
+    call pm_print_string
+    mov esi, edi
+    call pm_print_string
     call pm_newline
     ret
 
@@ -1183,7 +1239,7 @@ pm_help_msg db \
 'RX1: rxdump rxpoll rxpeek rxpacket rxipv4dump',13,\
 'RX2: rxkick rxdebug rxreset rxmode rxtest rxstatus',13,\
 'TASK: tasks yield',13,\
-'GHOSTTOR: torrelays torpick',13,\
+'GHOSTTOR: torrelays torpick torstate',13,\
 'FS: ls cat browse run halt',13,0
 pm_version_msg db 'ghost32',13,0
 pm_unknown_msg db '?',13,0
@@ -1225,6 +1281,7 @@ pm_cmd_cat db 'cat',0
 pm_cmd_browse db 'browse',0
 pm_cmd_torrelays db 'torrelays',0
 pm_cmd_torpick db 'torpick',0
+pm_cmd_torstate db 'torstate',0
 pm_cmd_run db 'run',0
 pm_cmd_version db 'version',0
 pm_cmd_mem db 'mem',0
@@ -1304,6 +1361,9 @@ torrelays_count db 0
 torrelays_line_ptr dd 0
 torpick_selected_msg db 'GhostTor selected relay',13,0
 torpick_not_found_msg db 'GhostTor relay not found',13,0
+torstate_header_msg db 'GhostTor state',13,0
+torstate_selected_yes_msg db 'selected=yes',13,0
+torstate_selected_no_msg db 'selected=no',13,0
 torpick_index_msg db 'index=',0
 torpick_nickname_msg db 'nickname=',0
 torpick_ip_msg db 'ip=',0
@@ -1312,4 +1372,10 @@ torpick_flags_msg db 'flags=',0
 torpick_ntor_msg db 'ntor=',0
 torpick_target db 0
 torpick_delim db 0
-torpick_label_ptr dd 0
+ghosttor_selected_ready db 0
+ghosttor_selected_index db 0
+ghosttor_selected_nickname times 32 db 0
+ghosttor_selected_ip times 16 db 0
+ghosttor_selected_orport times 8 db 0
+ghosttor_selected_flags times 64 db 0
+ghosttor_selected_ntor times 80 db 0

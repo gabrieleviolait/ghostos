@@ -107,6 +107,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_browse
 
+    mov edi, pm_cmd_torrelays
+    call pm_starts_with_word
+    jc pm_do_torrelays
+
     mov edi, pm_cmd_run
     call pm_starts_with_word
     jc pm_do_run
@@ -485,6 +489,112 @@ pm_do_browse:
 .load_error:
     call pm_print_fat12_error
     jmp shell32_loop
+
+pm_do_torrelays:
+    mov esi, torrelays_file_name
+    mov edi, page_buffer
+    mov ecx, PAGE_BUFFER_SIZE-1
+    call pm_fat12_read_file
+    jc .load_error
+
+    mov esi, torrelays_header_msg
+    call pm_print_string
+    mov esi, page_buffer
+    call torrelays_parse_buffer
+    mov esi, torrelays_count_msg
+    call pm_print_string
+    movzx eax, byte [torrelays_count]
+    call pm_print_uint32
+    call pm_newline
+    jmp shell32_loop
+
+.load_error:
+    mov esi, torrelays_load_error_msg
+    call pm_print_string
+    call pm_print_fat12_error
+    jmp shell32_loop
+
+torrelays_parse_buffer:
+    ; Minimal stage-1 parser: print Relay and ntor lines from TORRELAY.GHT.
+    pushad
+    mov byte [torrelays_count], 0
+
+.next_line:
+    cmp byte [esi], 0
+    je .done
+
+    cmp byte [esi], 'R'
+    jne .check_ntor
+    cmp byte [esi + 1], 'e'
+    jne .skip_line
+    cmp byte [esi + 2], 'l'
+    jne .skip_line
+    cmp byte [esi + 3], 'a'
+    jne .skip_line
+    cmp byte [esi + 4], 'y'
+    jne .skip_line
+    cmp byte [esi + 5], ' '
+    jne .skip_line
+    inc byte [torrelays_count]
+    call torrelays_print_line
+    jmp .skip_line
+
+.check_ntor:
+    cmp byte [esi], 'n'
+    jne .skip_line
+    cmp byte [esi + 1], 't'
+    jne .skip_line
+    cmp byte [esi + 2], 'o'
+    jne .skip_line
+    cmp byte [esi + 3], 'r'
+    jne .skip_line
+    cmp byte [esi + 4], '='
+    jne .skip_line
+    mov esi, torrelays_ntor_prefix_msg
+    call pm_print_string
+    mov esi, [torrelays_line_ptr]
+    call torrelays_print_line
+    jmp .skip_line
+
+.skip_line:
+    cmp byte [esi], 0
+    je .done
+    cmp byte [esi], 10
+    je .line_done
+    inc esi
+    jmp .skip_line
+
+.line_done:
+    inc esi
+    mov [torrelays_line_ptr], esi
+    jmp .next_line
+
+.done:
+    popad
+    ret
+
+torrelays_print_line:
+    mov [torrelays_line_ptr], esi
+
+.next:
+    mov al, [esi]
+    cmp al, 0
+    je .done
+    cmp al, 13
+    je .newline
+    cmp al, 10
+    je .newline
+    cmp al, '<'
+    je .newline
+    call pm_print_char
+    inc esi
+    jmp .next
+
+.newline:
+    call pm_newline
+
+.done:
+    ret
 
 pm_do_run:
     mov esi, pm_cmd_buffer
@@ -899,6 +1009,7 @@ pm_help_msg db \
 'RX1: rxdump rxpoll rxpeek rxpacket rxipv4dump',13,\
 'RX2: rxkick rxdebug rxreset rxmode rxtest rxstatus',13,\
 'TASK: tasks yield',13,\
+'GHOSTTOR: torrelays',13,\
 'FS: ls cat browse run halt',13,0
 pm_version_msg db 'ghost32',13,0
 pm_unknown_msg db '?',13,0
@@ -938,6 +1049,7 @@ pm_cmd_echo db 'echo',0
 pm_cmd_ls db 'ls',0
 pm_cmd_cat db 'cat',0
 pm_cmd_browse db 'browse',0
+pm_cmd_torrelays db 'torrelays',0
 pm_cmd_run db 'run',0
 pm_cmd_version db 'version',0
 pm_cmd_mem db 'mem',0
@@ -1008,3 +1120,10 @@ pm_cmd_memmap db 'memmap',0
 pm_cmd_tasks db 'tasks',0
 pm_cmd_yield db 'yield',0
 pm_cmd_halt db 'halt',0
+torrelays_file_name db 'TORRELAY.GHT',0
+torrelays_header_msg db 'GhostTor relay candidates',13,0
+torrelays_load_error_msg db 'torrelays: ',0
+torrelays_ntor_prefix_msg db '  ',0
+torrelays_count_msg db 'relay_count=',0
+torrelays_count db 0
+torrelays_line_ptr dd 0

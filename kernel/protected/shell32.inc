@@ -123,6 +123,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_torconn
 
+    mov edi, pm_cmd_torversions
+    call pm_starts_with_word
+    jc pm_do_torversions
+
     mov edi, pm_cmd_run
     call pm_starts_with_word
     jc pm_do_run
@@ -705,6 +709,56 @@ pm_do_torconn:
     mov esi, torconn_bad_state_msg
     call pm_print_string
     jmp shell32_loop
+
+pm_do_torversions:
+    call ghosttor_build_versions_cell
+
+    mov esi, torversions_header_msg
+    call pm_print_string
+
+    mov esi, torversions_circ_id_msg
+    call pm_print_string
+    xor eax, eax
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, torversions_cmd_msg
+    call pm_print_string
+    mov eax, 7
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, torversions_len_msg
+    call pm_print_string
+    movzx eax, word [ghosttor_versions_payload_len]
+    call pm_print_uint32
+    call pm_newline
+
+    mov esi, torversions_versions_msg
+    call pm_print_string
+
+    mov esi, torversions_cell_msg
+    call pm_print_string
+    mov esi, ghosttor_versions_cell
+    movzx ecx, word [ghosttor_versions_cell_len]
+    call rtl8139_dump_bytes
+    jmp shell32_loop
+
+ghosttor_build_versions_cell:
+    mov byte [ghosttor_versions_cell], 0
+    mov byte [ghosttor_versions_cell + 1], 0
+    mov byte [ghosttor_versions_cell + 2], 7
+    mov byte [ghosttor_versions_cell + 3], 0
+    mov byte [ghosttor_versions_cell + 4], 6
+    mov byte [ghosttor_versions_cell + 5], 0
+    mov byte [ghosttor_versions_cell + 6], 3
+    mov byte [ghosttor_versions_cell + 7], 0
+    mov byte [ghosttor_versions_cell + 8], 4
+    mov byte [ghosttor_versions_cell + 9], 0
+    mov byte [ghosttor_versions_cell + 10], 5
+    mov word [ghosttor_versions_payload_len], 6
+    mov word [ghosttor_versions_cell_len], 11
+    ret
 
 torpick_find_relay:
     pushad
@@ -1397,7 +1451,7 @@ pm_help_msg db \
 'RX1: rxdump rxpoll rxpeek rxpacket rxipv4dump',13,\
 'RX2: rxkick rxdebug rxreset rxmode rxtest rxstatus',13,\
 'TASK: tasks yield',13,\
-'GHOSTTOR: torrelays torpick torstate torconn',13,\
+'GHOSTTOR: torrelays torpick torstate torconn torversions',13,\
 'FS: ls cat browse run halt',13,0
 pm_version_msg db 'ghost32',13,0
 pm_unknown_msg db '?',13,0
@@ -1441,6 +1495,7 @@ pm_cmd_torrelays db 'torrelays',0
 pm_cmd_torpick db 'torpick',0
 pm_cmd_torstate db 'torstate',0
 pm_cmd_torconn db 'torconn',0
+pm_cmd_torversions db 'torversions',0
 pm_cmd_run db 'run',0
 pm_cmd_version db 'version',0
 pm_cmd_mem db 'mem',0
@@ -1526,6 +1581,12 @@ torstate_selected_no_msg db 'selected=no',13,0
 torconn_header_msg db 'GhostTor TCP connect',13,0
 torconn_not_selected_msg db 'GhostTor relay not selected',13,0
 torconn_bad_state_msg db 'GhostTor relay state invalid',13,0
+torversions_header_msg db 'GhostTor VERSIONS cell',13,0
+torversions_circ_id_msg db 'circ_id=',0
+torversions_cmd_msg db 'cmd=',0
+torversions_len_msg db 'len=',0
+torversions_versions_msg db 'versions=3,4,5',13,0
+torversions_cell_msg db 'cell=',0
 torpick_index_msg db 'index=',0
 torpick_nickname_msg db 'nickname=',0
 torpick_ip_msg db 'ip=',0
@@ -1541,3 +1602,6 @@ ghosttor_selected_ip times 16 db 0
 ghosttor_selected_orport times 8 db 0
 ghosttor_selected_flags times 64 db 0
 ghosttor_selected_ntor times 80 db 0
+ghosttor_versions_payload_len dw 0
+ghosttor_versions_cell_len dw 0
+ghosttor_versions_cell times 16 db 0

@@ -68,6 +68,7 @@ The project is developed as a learning and research platform to explore how mode
 * `torpick N` relay selection command
 * `torstate` selected relay state dump
 * `torconn` TCP connect toward the selected relay
+* `torversions` Tor VERSIONS cell builder/dump
 * Local fake relay seed for TCP testing on `10.0.2.2:9001`
 * Minimal parser for relay lines and ntor keys
 * Relay candidate count output
@@ -159,7 +160,7 @@ GhostNet currently supports ARP gateway discovery, ICMP ping testing, TCP connec
 
 The cryptographic subsystem now includes RFC7748-validated X25519, RFC5869-validated HKDF-SHA256, real GhostTLS X25519 key exchange, transcript hash construction, TLS 1.3 handshake secret derivation, traffic secret derivation, selected cipher reporting, and a TLS record parser capable of extracting ServerHello extensions. The current TLS path has negotiated ChaCha20-Poly1305 with `selected_cipher=0x1303`; the next block is handshake key/IV derivation and ChaCha20-Poly1305 record protection groundwork.
 
-GhostTor has started as a separate native MVP track. The current stage adds a static relay seed file (`TORRELAYS.GHT`), a `torrelays` command that reads relay candidates and ntor keys from the FAT12 image, a `torpick N` relay selection command, a `torstate` diagnostic state dump, and a `torconn` TCP-connect wrapper toward the selected relay IP/ORPort. This is bootstrap/debug infrastructure only, not an anonymous Tor client.
+GhostTor has started as a separate native MVP track. The current stage adds a static relay seed file (`TORRELAYS.GHT`), a `torrelays` command that reads relay candidates and ntor keys from the FAT12 image, a `torpick N` relay selection command, a `torstate` diagnostic state dump, a `torconn` TCP-connect wrapper toward the selected relay IP/ORPort, and a `torversions` builder/dump for the first Tor link-protocol VERSIONS cell. This is bootstrap/debug infrastructure only, not an anonymous Tor client.
 
 ---
 
@@ -357,6 +358,7 @@ HTTP/1.1 200 OK
 * ✅ Selected relay state storage
 * ✅ `torstate` diagnostic command
 * ✅ `torconn` TCP connect toward selected relay IP/ORPort
+* ✅ `torversions` VERSIONS cell builder/dump
 * ✅ Local fake relay seed: `localor 10.0.2.2:9001`
 * ✅ Minimal parser for `Relay ...` and `ntor=...` lines
 * ✅ Relay candidate count output
@@ -447,6 +449,7 @@ torrelays
 torpick 1
 torstate
 torconn
+torversions
 ```
 
 ---

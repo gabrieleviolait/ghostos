@@ -440,18 +440,25 @@ tls_build_empty_hash:
     ret
 
 
+tls_hkdf_expand_label_12:
+    mov byte [tls_hkdf_expand_len], 12
+    jmp tls_hkdf_expand_label_common
+
 tls_hkdf_expand_label_32:
+    mov byte [tls_hkdf_expand_len], 32
+
+tls_hkdf_expand_label_common:
     ; ESI = secret / PRK ptr
     ; EDI = output ptr
     ; EDX = label ptr, without "tls13 "
     ; EBX = label len
     ; EAX = context ptr
-    ; ECX = context len, normally 32
+    ; ECX = context len
     ;
-    ; HKDF-Expand-Label(secret, label, context, 32)
-    ; HkdfLabel = uint16(32) || uint8(len("tls13 " + label))
+    ; HKDF-Expand-Label(secret, label, context, expand_len)
+    ; HkdfLabel = uint16(expand_len) || uint8(len("tls13 " + label))
     ;             || "tls13 " + label || uint8(context_len) || context
-    ; OKM32 = HMAC(secret, HkdfLabel || 0x01)
+    ; OKM = HMAC(secret, HkdfLabel || 0x01)
     pushad
 
     mov [tls_hkdf_secret_ptr], esi
@@ -463,10 +470,11 @@ tls_hkdf_expand_label_32:
 
     mov edi, tls_hkdf_label_buf
 
-    ; uint16 length = 32
+    ; uint16 length = expand_len
     mov byte [edi], 0
     inc edi
-    mov byte [edi], 32
+    mov al, [tls_hkdf_expand_len]
+    mov [edi], al
     inc edi
 
     ; label len = len("tls13 ") + label_len
@@ -561,6 +569,7 @@ tls_hkdf_label_ptr dd 0
 tls_hkdf_label_len dd 0
 tls_hkdf_context_ptr dd 0
 tls_hkdf_context_len dd 0
+tls_hkdf_expand_len db 32
 
 tls_transcript_hash_msg db 'transcript_hash built',13,0
 tls_handshake_secret_msg db 'handshake_secret derived',13,0
@@ -607,14 +616,14 @@ tls_derive_handshake_key_iv:
     mov esi, tls_server_hs_key_msg
     call pm_print_string
 
-    ; client_hs_iv = first 12 bytes of HKDF-Expand-Label(client_hs_traffic_secret, "iv", "", 32)
+    ; client_hs_iv = HKDF-Expand-Label(client_hs_traffic_secret, "iv", "", 12)
     mov esi, tls_client_hs_traffic_secret
     mov edi, tls_runtime_tmp32
     mov edx, tls_label_iv
     mov ebx, tls_label_iv_len
     mov eax, tls_empty_context
     xor ecx, ecx
-    call tls_hkdf_expand_label_32
+    call tls_hkdf_expand_label_12
 
     mov esi, tls_runtime_tmp32
     mov edi, tls_client_hs_iv
@@ -625,14 +634,14 @@ tls_derive_handshake_key_iv:
     mov esi, tls_client_hs_iv_msg
     call pm_print_string
 
-    ; server_hs_iv = first 12 bytes of HKDF-Expand-Label(server_hs_traffic_secret, "iv", "", 32)
+    ; server_hs_iv = HKDF-Expand-Label(server_hs_traffic_secret, "iv", "", 12)
     mov esi, tls_server_hs_traffic_secret
     mov edi, tls_runtime_tmp32
     mov edx, tls_label_iv
     mov ebx, tls_label_iv_len
     mov eax, tls_empty_context
     xor ecx, ecx
-    call tls_hkdf_expand_label_32
+    call tls_hkdf_expand_label_12
 
     mov esi, tls_runtime_tmp32
     mov edi, tls_server_hs_iv
@@ -674,4 +683,3 @@ tls_server_hs_key_msg db 'server_hs_key derived',13,0
 tls_client_hs_iv_msg db 'client_hs_iv derived',13,0
 tls_server_hs_iv_msg db 'server_hs_iv derived',13,0
 tls_key_iv_not_ready_msg db 'handshake key/iv: secrets not ready',13,0
-

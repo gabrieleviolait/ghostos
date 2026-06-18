@@ -119,6 +119,10 @@ shell32_loop:
     call pm_starts_with_word
     jc pm_do_torstate
 
+    mov edi, pm_cmd_torconn
+    call pm_starts_with_word
+    jc pm_do_torconn
+
     mov edi, pm_cmd_run
     call pm_starts_with_word
     jc pm_do_run
@@ -660,6 +664,48 @@ pm_do_torstate:
     call pm_print_string
     jmp shell32_loop
 
+pm_do_torconn:
+    cmp byte [ghosttor_selected_ready], 1
+    jne .not_selected
+
+    mov esi, torconn_header_msg
+    call pm_print_string
+
+    mov esi, torpick_nickname_msg
+    mov edi, ghosttor_selected_nickname
+    call ghosttor_print_string_field
+
+    mov esi, torpick_ip_msg
+    mov edi, ghosttor_selected_ip
+    call ghosttor_print_string_field
+
+    mov esi, torpick_orport_msg
+    mov edi, ghosttor_selected_orport
+    call ghosttor_print_string_field
+
+    mov esi, ghosttor_selected_ip
+    mov edi, rtl8139_tcp_dst_ip
+    call ghosttor_parse_ipv4_to
+    jc .bad_state
+
+    mov esi, ghosttor_selected_orport
+    call ghosttor_parse_uint16
+    jc .bad_state
+
+    mov [rtl8139_tcp_dst_port], ax
+    call rtl8139_tcpconnect_start
+    jmp shell32_loop
+
+.not_selected:
+    mov esi, torconn_not_selected_msg
+    call pm_print_string
+    jmp shell32_loop
+
+.bad_state:
+    mov esi, torconn_bad_state_msg
+    call pm_print_string
+    jmp shell32_loop
+
 torpick_find_relay:
     pushad
 
@@ -824,6 +870,118 @@ ghosttor_print_string_field:
     mov esi, edi
     call pm_print_string
     call pm_newline
+    ret
+
+; ESI = dotted IPv4 string, EDI = 4-byte output.
+; Carry clear on success, set on parse failure.
+ghosttor_parse_ipv4_to:
+    mov ecx, 4
+
+.next_octet:
+    call ghosttor_parse_u8
+    jc .fail
+    mov [edi], al
+    inc edi
+    dec ecx
+    cmp ecx, 0
+    je .done
+    cmp byte [esi], '.'
+    jne .fail
+    inc esi
+    jmp .next_octet
+
+.done:
+    cmp byte [esi], 0
+    jne .fail
+    clc
+    ret
+
+.fail:
+    stc
+    ret
+
+ghosttor_parse_u8:
+    push ebx
+    push ecx
+    push edx
+
+    xor eax, eax
+    xor ebx, ebx
+
+.digit:
+    movzx edx, byte [esi]
+    cmp dl, '0'
+    jb .done
+    cmp dl, '9'
+    ja .done
+    sub edx, '0'
+    mov ecx, eax
+    shl eax, 3
+    lea eax, [eax + ecx * 2]
+    add eax, edx
+    cmp eax, 255
+    ja .fail
+    inc esi
+    inc bl
+    jmp .digit
+
+.done:
+    cmp bl, 0
+    je .fail
+    clc
+    pop edx
+    pop ecx
+    pop ebx
+    ret
+
+.fail:
+    stc
+    pop edx
+    pop ecx
+    pop ebx
+    ret
+
+ghosttor_parse_uint16:
+    push ebx
+    push ecx
+    push edx
+
+    xor eax, eax
+    xor ebx, ebx
+
+.digit:
+    movzx edx, byte [esi]
+    cmp dl, '0'
+    jb .done
+    cmp dl, '9'
+    ja .done
+    sub edx, '0'
+    mov ecx, eax
+    shl eax, 3
+    lea eax, [eax + ecx * 2]
+    add eax, edx
+    cmp eax, 65535
+    ja .fail
+    inc esi
+    inc bl
+    jmp .digit
+
+.done:
+    cmp bl, 0
+    je .fail
+    cmp byte [esi], 0
+    jne .fail
+    clc
+    pop edx
+    pop ecx
+    pop ebx
+    ret
+
+.fail:
+    stc
+    pop edx
+    pop ecx
+    pop ebx
     ret
 
 pm_do_run:
@@ -1239,7 +1397,7 @@ pm_help_msg db \
 'RX1: rxdump rxpoll rxpeek rxpacket rxipv4dump',13,\
 'RX2: rxkick rxdebug rxreset rxmode rxtest rxstatus',13,\
 'TASK: tasks yield',13,\
-'GHOSTTOR: torrelays torpick torstate',13,\
+'GHOSTTOR: torrelays torpick torstate torconn',13,\
 'FS: ls cat browse run halt',13,0
 pm_version_msg db 'ghost32',13,0
 pm_unknown_msg db '?',13,0
@@ -1282,6 +1440,7 @@ pm_cmd_browse db 'browse',0
 pm_cmd_torrelays db 'torrelays',0
 pm_cmd_torpick db 'torpick',0
 pm_cmd_torstate db 'torstate',0
+pm_cmd_torconn db 'torconn',0
 pm_cmd_run db 'run',0
 pm_cmd_version db 'version',0
 pm_cmd_mem db 'mem',0
@@ -1364,6 +1523,9 @@ torpick_not_found_msg db 'GhostTor relay not found',13,0
 torstate_header_msg db 'GhostTor state',13,0
 torstate_selected_yes_msg db 'selected=yes',13,0
 torstate_selected_no_msg db 'selected=no',13,0
+torconn_header_msg db 'GhostTor TCP connect',13,0
+torconn_not_selected_msg db 'GhostTor relay not selected',13,0
+torconn_bad_state_msg db 'GhostTor relay state invalid',13,0
 torpick_index_msg db 'index=',0
 torpick_nickname_msg db 'nickname=',0
 torpick_ip_msg db 'ip=',0

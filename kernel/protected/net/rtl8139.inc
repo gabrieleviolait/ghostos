@@ -124,6 +124,7 @@ rtl8139_tcp_last_payload_len dw 0
 rtl8139_tcp_last_payload_wire_len dw 0
 rtl8139_tcp_src_port dw 49153
 rtl8139_tcp_dst_port dw 80
+rtl8139_tcp_dst_ip db 10,0,2,2
 rtl8139_tcp_seq dd 01020304h
 rtl8139_tcp_last_src_ip db 0,0,0,0
 rtl8139_tcp_last_src_port dw 0
@@ -734,6 +735,8 @@ rtl8139_tcpconnect_cmd:
     call pm_starts_with_word
     jnc .usage
 
+    call rtl8139_tcp_use_gateway_ip
+
     call pm_skip_first_word
     call pm_skip_spaces
 
@@ -828,6 +831,20 @@ rtl8139_tcpconnect_cmd:
 rtl8139_tcpconnect_start:
     jmp rtl8139_tcpconnect_cmd.port_ok
 
+rtl8139_tcp_use_gateway_ip:
+    pushad
+    mov esi, rtl8139_gateway_ip
+    mov edi, rtl8139_tcp_dst_ip
+    mov ecx, 4
+
+.copy:
+    lodsb
+    stosb
+    loop .copy
+
+    popad
+    ret
+
 rtl8139_tcpget_cmd:
     cmp byte [rtl8139_tcp_state], TCP_STATE_ESTABLISHED
     je .established
@@ -880,6 +897,7 @@ rtl8139_tlstest_cmd:
     call rtl8139_pingtest
     call rtl8139_tlstest_pause
 
+    call rtl8139_tcp_use_gateway_ip
     mov word [rtl8139_tcp_dst_port], 4433
     call rtl8139_tcpconnect_start
     call rtl8139_tlstest_pause
@@ -1604,7 +1622,7 @@ rtl8139_build_tcp_http_get:
     ; IPv4 header with TCP + payload length
     mov ax, 20 + 20 + rtl8139_tcp_http_get_len
     mov bl, 06h
-    mov esi, rtl8139_gateway_ip
+    mov esi, rtl8139_tcp_dst_ip
     call rtl8139_write_ipv4_header
 
     ; TCP source port
@@ -1696,7 +1714,7 @@ rtl8139_build_tcp_tls_clienthello:
     ; IPv4 header with TCP + payload length
     mov ax, 20 + 20 + tls_clienthello_len
     mov bl, 06h
-    mov esi, rtl8139_gateway_ip
+    mov esi, rtl8139_tcp_dst_ip
     call rtl8139_write_ipv4_header
 
     ; TCP source port
@@ -1775,7 +1793,7 @@ rtl8139_write_ipv4_tcp_frame_prefix:
 
     mov ax, 20 + 20
     mov bl, 06h
-    mov esi, rtl8139_gateway_ip
+    mov esi, rtl8139_tcp_dst_ip
     call rtl8139_write_ipv4_header
     ret
 
@@ -1811,7 +1829,7 @@ rtl8139_finish_tcp_checksum:
     stosb
     loop .copy_src_ip
 
-    mov esi, rtl8139_gateway_ip
+    mov esi, rtl8139_tcp_dst_ip
     mov ecx, 4
 .copy_dst_ip:
     lodsb
@@ -1860,7 +1878,7 @@ rtl8139_finish_tcp_checksum_payload:
     stosb
     loop .copy_src_ip
 
-    mov esi, rtl8139_gateway_ip
+    mov esi, rtl8139_tcp_dst_ip
     mov ecx, 4
 .copy_dst_ip:
     lodsb
@@ -1914,7 +1932,7 @@ rtl8139_finish_tcp_checksum_tls_clienthello:
     stosb
     loop .copy_src_ip
 
-    mov esi, rtl8139_gateway_ip
+    mov esi, rtl8139_tcp_dst_ip
     mov ecx, 4
 .copy_dst_ip:
     lodsb

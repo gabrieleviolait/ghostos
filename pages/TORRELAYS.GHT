@@ -3,7 +3,7 @@
 <p>Stage 1 bootstrap data only. These debug records are not anonymity.</p>
 <hr>
 <pre>
-Relay 1: ghostguard  192.0.2.10:9001   flags=Guard Fast Stable
+Relay 1: localor     10.0.2.2:9001     flags=Guard Fast Stable
 ntor=000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F
 
 Relay 2: ghostmiddle 198.51.100.20:9001 flags=Fast Stable
